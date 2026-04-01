@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>강의 반응</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root { --accent: #a78bfa; --accent-dim: rgba(167,139,250,0.15); }
+
+    body {
+      background: #080812;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      padding: 22px 20px 16px;
+      text-align: center;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    #count-text {
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+
+    /* ── Emoji grid ── */
+    #emoji-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 28px 20px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .emoji-btn {
+      aspect-ratio: 1;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.09);
+      border-radius: 22px;
+      font-size: 2.6rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .emoji-btn:active {
+      transform: scale(0.86);
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+
+    .emoji-btn.flash {
+      animation: btnFlash 0.45s ease forwards;
+    }
+
+    @keyframes btnFlash {
+      0%   { background: rgba(167,139,250,0.35); border-color: var(--accent); }
+      100% { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); }
+    }
+
+    /* ── Cooldown bar ── */
+    #cooldown-track {
+      width: 76%;
+      max-width: 300px;
+      height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    #cooldown-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* ── Big emoji feedback ── */
+    #big-emoji {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 6rem;
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: opacity 0.12s, transform 0.12s;
+      z-index: 999;
+    }
+
+    #big-emoji.show {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ── Status ── */
+    #statusbar {
+      font-size: 0.78rem;
+      color: #334155;
+      padding: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎓 강의 반응</h1>
+  <div id="count-text">참여자 <span id="count">0</span>명</div>
+</header>
+
+<div id="emoji-grid">
+  <button class="emoji-btn" data-emoji="👍">👍</button>
+  <button class="emoji-btn" data-emoji="👏">👏</button>
+  <button class="emoji-btn" data-emoji="❤️">❤️</button>
+  <button class="emoji-btn" data-emoji="😂">😂</button>
+  <button class="emoji-btn" data-emoji="🤔">🤔</button>
+  <button class="emoji-btn" data-emoji="😮">😮</button>
+  <button class="emoji-btn" data-emoji="🔥">🔥</button>
+  <button class="emoji-btn" data-emoji="✨">✨</button>
+  <button class="emoji-btn" data-emoji="❓">❓</button>
+</div>
+
+<div id="cooldown-track"><div id="cooldown-fill"></div></div>
+<div id="statusbar">서버 연결 중…</div>
+<div id="big-emoji"></div>
+
+<script>
+  const COOLDOWN = 700; // ms
+  const host   = window.location.host;
+  const proto  = location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl  = `${proto}://${host}/ws/student`;
+
+  let ws;
+  let canSend = true;
+
+  function connect() {
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      document.getElementById('statusbar').textContent = '✅ 연결됨 — 이모지를 눌러보세요!';
+    };
+
+    ws.onmessage = ({ data }) => {
+      const msg = JSON.parse(data);
+      if (msg.type === 'count') document.getElementById('count').textContent = msg.count;
+    };
+
+    ws.onclose = () => {
+      document.getElementById('statusbar').textContent = '⚠️ 연결 끊김 — 재연결 중…';
+      setTimeout(connect, 2000);
+    };
+  }
+
+  connect();
+
+  document.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!canSend || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      const emoji = btn.dataset.emoji;
+      ws.send(JSON.stringify({ type: 'emoji', emoji }));
+
+      // Button flash
+      btn.classList.remove('flash');
+      void btn.offsetWidth; // reflow
+      btn.classList.add('flash');
+
+      // Big emoji feedback
+      showBig(emoji);
+
+      // Cooldown
+      startCooldown();
+    });
+  });
+
+  function showBig(emoji) {
+    const el = document.getElementById('big-emoji');
+    el.textContent = emoji;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 500);
+  }
+
+  function startCooldown() {
+    canSend = false;
+    const fill = document.getElementById('cooldown-fill');
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    requestAnimationFrame(() => {
+      fill.style.transition = `width ${COOLDOWN}ms linear`;
+      fill.style.width = '0%';
+    });
+    setTimeout(() => { canSend = true; }, COOLDOWN);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>강의 반응 — 강사 화면</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #080812;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+
+    #title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #a78bfa;
+      letter-spacing: -0.01em;
+    }
+
+    #count-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(167,139,250,0.12);
+      border: 1px solid rgba(167,139,250,0.35);
+      border-radius: 999px;
+      padding: 7px 18px;
+      font-size: 0.95rem;
+      color: #c4b5fd;
+    }
+
+    #count-badge .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 6px #4ade80;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ── Main ── */
+    #main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    #join-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 36px 48px;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+      text-align: center;
+    }
+
+    #join-card h2 {
+      font-size: 0.95rem;
+      font-weight: 400;
+      color: #94a3b8;
+    }
+
+    #qrcode {
+      background: white;
+      padding: 14px;
+      border-radius: 16px;
+      line-height: 0;
+    }
+
+    #join-url {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #a78bfa;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Floating emojis ── */
+    #emoji-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 200;
+    }
+
+    .floater {
+      position: absolute;
+      bottom: -80px;
+      font-size: 3.2rem;
+      line-height: 1;
+      animation: rise var(--dur, 3.6s) ease-out forwards;
+      will-change: transform, opacity;
+    }
+
+    @keyframes rise {
+      0%   { transform: translateY(0)       scale(0.4); opacity: 0; }
+      8%   { transform: translateY(-60px)   scale(1.3); opacity: 1; }
+      75%  { opacity: 1; }
+      100% { transform: translateY(-90vh)   scale(1.0); opacity: 0; }
+    }
+
+    /* ── Status bar ── */
+    #statusbar {
+      padding: 8px 20px;
+      font-size: 0.75rem;
+      color: #334155;
+      text-align: center;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">🎓 강의 이모지 반응</div>
+  <div id="count-badge">
+    <span class="dot"></span>
+    학생 <span id="count">0</span>명 접속 중
+  </div>
+</div>
+
+<div id="main">
+  <div id="join-card">
+    <h2>학생들에게 아래 QR코드 또는 주소를 공유하세요</h2>
+    <div id="qrcode"></div>
+    <div id="join-url">연결 중…</div>
+  </div>
+</div>
+
+<div id="emoji-layer"></div>
+<div id="statusbar">서버 연결 중…</div>
+
+<script>
+  const host       = window.location.host;
+  const proto      = location.protocol === 'https:' ? 'wss' : 'ws';
+  const studentUrl = `${location.protocol}//${host}/student.html`;
+  const wsUrl      = `${proto}://${host}/ws/presenter`;
+
+  document.getElementById('join-url').textContent = studentUrl;
+
+  new QRCode(document.getElementById('qrcode'), {
+    text: studentUrl,
+    width: 200, height: 200,
+    colorDark: '#000000', colorLight: '#ffffff',
+  });
+
+  const layer  = document.getElementById('emoji-layer');
+  const status = document.getElementById('statusbar');
+  const countEl = document.getElementById('count');
+
+  function spawnEmoji(emoji) {
+    const el = document.createElement('span');
+    el.className = 'floater';
+    el.textContent = emoji;
+
+    const x   = 8 + Math.random() * 84;          // 8%–92%
+    const dur = (3.2 + Math.random() * 1.8).toFixed(2) + 's';
+    el.style.left = `${x}%`;
+    el.style.setProperty('--dur', dur);
+
+    layer.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+
+  let ws;
+  function connect() {
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      status.textContent = '✅ 서버 연결됨';
+    };
+
+    ws.onmessage = ({ data }) => {
+      const msg = JSON.parse(data);
+      if (msg.type === 'emoji') spawnEmoji(msg.emoji);
+      if (msg.type === 'count') countEl.textContent = msg.count;
+    };
+
+    ws.onclose = () => {
+      status.textContent = '⚠️ 연결 끊김 — 재연결 중…';
+      setTimeout(connect, 2000);
+    };
+  }
+
+  connect();
+</script>
+</body>
+</html>
