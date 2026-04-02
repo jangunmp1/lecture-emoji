@@ -15,9 +15,9 @@ import random
 import threading
 import argparse
 
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QPixmap, QColor, QPainter
 
 import websockets
 
@@ -181,6 +181,8 @@ def main():
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")  # XWayland 강제 사용
 
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
     overlay = EmojiOverlay()
     overlay.show()
 
@@ -188,6 +190,21 @@ def main():
         _setup_macos(overlay)
     elif sys.platform.startswith("linux"):
         _setup_linux(overlay)
+
+    # ── 트레이 아이콘 ──────────────────────────────────────────────────────────
+    icon_pixmap = QPixmap(32, 32)
+    icon_pixmap.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(icon_pixmap)
+    painter.setFont(QFont("serif", 22))
+    painter.drawText(icon_pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "🎉")
+    painter.end()
+
+    tray = QSystemTrayIcon(icon_pixmap, app)
+    menu = QMenu()
+    menu.addAction("종료").triggered.connect(app.quit)
+    tray.setContextMenu(menu)
+    tray.setToolTip("강의 이모지 오버레이")
+    tray.show()
 
     _start_ws_thread(ws_url)
 
