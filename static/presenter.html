@@ -148,7 +148,7 @@
       background: rgba(20, 16, 40, 0.92);
       border: 1px solid rgba(167,139,250,0.45);
       border-radius: 18px 18px 18px 4px;
-      padding: 12px 16px;
+      padding: 10px 10px 10px 16px;
       color: #e2e8f0;
       font-size: 1rem;
       line-height: 1.45;
@@ -156,6 +156,29 @@
       backdrop-filter: blur(10px);
       box-shadow: 0 4px 24px rgba(0,0,0,0.5);
       animation: bubbleIn 0.3s ease forwards;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .bubble-text { flex: 1; }
+
+    .bubble-close {
+      flex-shrink: 0;
+      background: transparent;
+      border: none;
+      color: #475569;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 2px 4px;
+      line-height: 1;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .bubble-close:hover {
+      color: #e2e8f0;
+      background: rgba(255,255,255,0.1);
     }
 
     @keyframes bubbleIn {
@@ -228,11 +251,30 @@
     el.addEventListener('animationend', () => el.remove());
   }
 
-  function spawnBubble(text) {
+  function spawnBubble(text, id) {
     const el = document.createElement('div');
     el.className = 'bubble';
-    el.textContent = text;
+    el.dataset.id = id;
+
+    const span = document.createElement('span');
+    span.className = 'bubble-text';
+    span.textContent = text;
+
+    const btn = document.createElement('button');
+    btn.className = 'bubble-close';
+    btn.textContent = '✕';
+    btn.addEventListener('click', () => {
+      ws.send(JSON.stringify({ type: 'delete_bubble', id }));
+    });
+
+    el.appendChild(span);
+    el.appendChild(btn);
     bubbleLayer.appendChild(el);
+  }
+
+  function deleteBubble(id) {
+    const el = bubbleLayer.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (el) el.remove();
   }
 
   let ws;
@@ -245,9 +287,10 @@
 
     ws.onmessage = ({ data }) => {
       const msg = JSON.parse(data);
-      if (msg.type === 'emoji')    spawnEmoji(msg.emoji);
-      if (msg.type === 'count')    countEl.textContent = msg.count;
-      if (msg.type === 'question') spawnBubble(msg.text);
+      if (msg.type === 'emoji')         spawnEmoji(msg.emoji);
+      if (msg.type === 'count')         countEl.textContent = msg.count;
+      if (msg.type === 'question')      spawnBubble(msg.text, msg.id);
+      if (msg.type === 'delete_bubble') deleteBubble(msg.id);
     };
 
     ws.onclose = () => {

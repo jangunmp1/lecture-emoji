@@ -51,11 +51,21 @@ class ConnectionManager:
         for ws in dead:
             self.presenters.remove(ws)
 
-    async def send_question_to_presenters(self, text: str):
+    async def send_question_to_presenters(self, text: str, bubble_id: str):
         dead = []
         for ws in self.presenters:
             try:
-                await ws.send_text(json.dumps({"type": "question", "text": text}))
+                await ws.send_text(json.dumps({"type": "question", "text": text, "id": bubble_id}))
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.presenters.remove(ws)
+
+    async def broadcast_to_presenters(self, msg: dict):
+        dead = []
+        for ws in self.presenters:
+            try:
+                await ws.send_text(json.dumps(msg))
             except Exception:
                 dead.append(ws)
         for ws in dead:
@@ -78,7 +88,16 @@ async def presenter_ws(ws: WebSocket):
     await manager.connect_presenter(ws)
     try:
         while True:
-            await ws.receive_text()
+            data = await ws.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "delete_bubble" and msg.get("id"):
+                    await manager.broadcast_to_presenters({
+                        "type": "delete_bubble",
+                        "id": str(msg["id"])[:64],
+                    })
+            except json.JSONDecodeError:
+                pass
     except WebSocketDisconnect:
         await manager.disconnect(ws)
 
@@ -95,7 +114,8 @@ async def student_ws(ws: WebSocket):
                     await manager.send_emoji_to_presenters(msg["emoji"])
                 elif msg.get("type") == "question" and msg.get("text"):
                     text = str(msg["text"])[:100]
-                    await manager.send_question_to_presenters(text)
+                    bubble_id = str(msg.get("id", ""))[:64]
+                    await manager.send_question_to_presenters(text, bubble_id)
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:

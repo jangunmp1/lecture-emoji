@@ -25,7 +25,8 @@ import websockets
 # ── Qt 시그널 브릿지 (asyncio 스레드 → Qt 메인 스레드) ──────────────────────
 class _Bridge(QObject):
     emoji_received    = pyqtSignal(str)
-    question_received = pyqtSignal(str)
+    question_received = pyqtSignal(str, str)  # text, id
+    bubble_deleted    = pyqtSignal(str)        # id
 
 
 bridge = _Bridge()
@@ -47,10 +48,11 @@ class EmojiOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        self._bubbles: list[QLabel] = []
+        self._bubbles: dict[str, QLabel] = {}
 
         bridge.emoji_received.connect(self._spawn)
         bridge.question_received.connect(self._spawn_bubble)
+        bridge.bubble_deleted.connect(self._delete_bubble)
 
     def _spawn(self, emoji: str):
         label = QLabel(emoji, self)
@@ -78,7 +80,7 @@ class EmojiOverlay(QWidget):
 
         label._anim = anim  # GC 방지
 
-    def _spawn_bubble(self, text: str):
+    def _spawn_bubble(self, text: str, bubble_id: str):
         MARGIN_LEFT   = 32
         MARGIN_BOTTOM = 32
         BUBBLE_WIDTH  = 300
@@ -100,14 +102,19 @@ class EmojiOverlay(QWidget):
         label.adjustSize()
         new_h = label.height()
 
-        for b in self._bubbles:
+        for b in self._bubbles.values():
             b.move(b.x(), b.y() - new_h - GAP)
 
         y = self.height() - MARGIN_BOTTOM - new_h
         label.move(MARGIN_LEFT, y)
         label.show()
         label.raise_()
-        self._bubbles.append(label)
+        self._bubbles[bubble_id] = label
+
+    def _delete_bubble(self, bubble_id: str):
+        label = self._bubbles.pop(bubble_id, None)
+        if label:
+            label.deleteLater()
 
 
 # ── Linux 전용 설정 ───────────────────────────────────────────────────────────
@@ -183,7 +190,9 @@ async def _ws_loop(ws_url: str):
                         if msg.get("type") == "emoji":
                             bridge.emoji_received.emit(msg["emoji"])
                         elif msg.get("type") == "question":
-                            bridge.question_received.emit(msg["text"])
+                            bridge.question_received.emit(msg["text"], msg.get("id", ""))
+                        elif msg.get("type") == "delete_bubble":
+                            bridge.bubble_deleted.emit(msg.get("id", ""))
                     except json.JSONDecodeError:
                         pass
         except Exception as e:
