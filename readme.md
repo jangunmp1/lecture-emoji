@@ -7,14 +7,19 @@
 
 ```
 lecture-emoji/
-├── app.py               # FastAPI 서버 (WebSocket 포함)
-├── requirements.txt     # Python 패키지 목록
+├── app.py                    # FastAPI 서버 (WebSocket 포함)
+├── overlay.py                # 데스크톱 이모지 오버레이 (선택 사항)
+├── requirements.txt          # 서버 패키지 목록
+├── requirements-overlay.txt  # 오버레이 패키지 목록
+├── Procfile                  # Heroku 배포 설정
 └── static/
-    ├── presenter.html   # 강사 화면 (이모지 떠오르는 화면 + QR코드)
-    └── student.html     # 학생 화면 (이모지 버튼)
+    ├── presenter.html        # 강사 화면 (이모지 떠오르는 화면 + QR코드)
+    └── student.html          # 학생 화면 (이모지 버튼)
 ```
 
 ## 실행 방법
+
+### 서버
 
 ```bash
 # 패키지 설치 (최초 1회)
@@ -36,6 +41,28 @@ python app.py
 ====================================================
 ```
 
+### 데스크톱 오버레이 (선택 사항)
+
+브라우저 없이 화면 위에 직접 이모지를 띄우는 투명 오버레이 앱입니다.
+
+```bash
+# 패키지 설치 (최초 1회)
+pip install -r requirements-overlay.txt
+
+# 오버레이 실행 (서버가 먼저 실행되어 있어야 합니다)
+python overlay.py
+
+# 원격 서버에 연결할 때
+python overlay.py --host 192.168.x.x
+
+# 클라우드 서버에 연결할 때 (WSS)
+python overlay.py --host example.com --ssl
+```
+
+오버레이는 시스템 트레이에 🎉 아이콘으로 표시되며, **우클릭 → 종료**로 닫을 수 있습니다.
+
+> **Linux (Wayland)**: XWayland가 설치되어 있어야 합니다.
+
 ## 사용 방법
 
 1. **강사**: `presenter.html`을 브라우저에서 열어 프로젝터/화면에 띄운다
@@ -52,9 +79,11 @@ python app.py
 - **실시간 접속자 수**: 강사/학생 화면 모두에 표시
 - **스팸 방지**: 학생당 0.7초 쿨다운
 - **자동 재연결**: 네트워크 끊김 시 자동으로 재연결 시도
+- **데스크톱 오버레이**: 화면 위에 직접 이모지를 띄우는 투명 오버레이 (macOS/Linux/Windows 지원)
 
 ## 기술 스택
 
 - **백엔드**: Python, FastAPI, WebSocket
 - **프론트엔드**: HTML/CSS/JavaScript (바닐라, 프레임워크 없음)
 - **QR코드**: qrcodejs (CDN)
+- **오버레이**: PyQt6, python-xlib (Linux), pyobjc (macOS)
