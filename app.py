@@ -23,11 +23,14 @@ class ConnectionManager:
     def __init__(self):
         self.presenters: list[WebSocket] = []
         self.students: list[WebSocket] = []
+        self.bubbles: list[dict] = []  # {"id": ..., "text": ...}
 
     async def connect_presenter(self, ws: WebSocket):
         await ws.accept()
         self.presenters.append(ws)
         await ws.send_text(json.dumps({"type": "count", "count": len(self.students)}))
+        for bubble in self.bubbles:
+            await ws.send_text(json.dumps({"type": "question", "text": bubble["text"], "id": bubble["id"]}))
 
     async def connect_student(self, ws: WebSocket):
         await ws.accept()
@@ -52,6 +55,7 @@ class ConnectionManager:
             self.presenters.remove(ws)
 
     async def send_question_to_presenters(self, text: str, bubble_id: str):
+        self.bubbles.append({"id": bubble_id, "text": text})
         dead = []
         for ws in self.presenters:
             try:
@@ -62,6 +66,8 @@ class ConnectionManager:
             self.presenters.remove(ws)
 
     async def broadcast_to_presenters(self, msg: dict):
+        if msg.get("type") == "delete_bubble":
+            self.bubbles = [b for b in self.bubbles if b["id"] != msg.get("id")]
         dead = []
         for ws in self.presenters:
             try:
