@@ -119,6 +119,71 @@
       transform: scale(1);
     }
 
+    /* ── Question input ── */
+    #question-area {
+      width: 100%;
+      max-width: 420px;
+      padding: 0 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #question-area label {
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+
+    #question-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #question-input {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      padding: 10px 14px;
+      color: #e2e8f0;
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #question-input:focus {
+      border-color: var(--accent);
+    }
+
+    #question-send {
+      background: var(--accent-dim);
+      border: 2px solid rgba(167,139,250,0.4);
+      border-radius: 14px;
+      padding: 10px 16px;
+      color: var(--accent);
+      font-size: 1rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #question-send:active {
+      background: rgba(167,139,250,0.3);
+    }
+
+    #question-send:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    #char-count {
+      font-size: 0.75rem;
+      color: #475569;
+      text-align: right;
+    }
+
     /* ── Status ── */
     #statusbar {
       font-size: 0.78rem;
@@ -148,6 +213,16 @@
 </div>
 
 <div id="cooldown-track"><div id="cooldown-fill"></div></div>
+
+<div id="question-area">
+  <label for="question-input">💬 질문 보내기</label>
+  <div id="question-row">
+    <input id="question-input" type="text" maxlength="100" placeholder="질문을 입력하세요…" autocomplete="off" />
+    <button id="question-send">전송</button>
+  </div>
+  <div id="char-count">0 / 100</div>
+</div>
+
 <div id="statusbar">서버 연결 중…</div>
 <div id="big-emoji"></div>
 
@@ -206,6 +281,28 @@
     el.classList.add('show');
     setTimeout(() => el.classList.remove('show'), 500);
   }
+
+  // ── Question ──
+  const qInput  = document.getElementById('question-input');
+  const qSend   = document.getElementById('question-send');
+  const qCount  = document.getElementById('char-count');
+
+  qInput.addEventListener('input', () => {
+    qCount.textContent = `${qInput.value.length} / 100`;
+  });
+
+  function sendQuestion() {
+    const text = qInput.value.trim();
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'question', text }));
+    qInput.value = '';
+    qCount.textContent = '0 / 100';
+    qSend.disabled = true;
+    setTimeout(() => { qSend.disabled = false; }, 3000);
+  }
+
+  qSend.addEventListener('click', sendQuestion);
+  qInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendQuestion(); });
 
   function startCooldown() {
     canSend = false;

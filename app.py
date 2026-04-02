@@ -51,6 +51,16 @@ class ConnectionManager:
         for ws in dead:
             self.presenters.remove(ws)
 
+    async def send_question_to_presenters(self, text: str):
+        dead = []
+        for ws in self.presenters:
+            try:
+                await ws.send_text(json.dumps({"type": "question", "text": text}))
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.presenters.remove(ws)
+
     async def _broadcast_count(self):
         msg = json.dumps({"type": "count", "count": len(self.students)})
         for ws in self.presenters + self.students:
@@ -83,6 +93,9 @@ async def student_ws(ws: WebSocket):
                 msg = json.loads(data)
                 if msg.get("type") == "emoji" and msg.get("emoji"):
                     await manager.send_emoji_to_presenters(msg["emoji"])
+                elif msg.get("type") == "question" and msg.get("text"):
+                    text = str(msg["text"])[:100]
+                    await manager.send_question_to_presenters(text)
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
