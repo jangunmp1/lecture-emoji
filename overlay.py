@@ -17,7 +17,7 @@ import argparse
 
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
-from PyQt6.QtGui import QFont, QPixmap, QColor, QPainter
+from PyQt6.QtGui import QFont, QPixmap, QColor, QPainter, QIcon
 
 import websockets
 
@@ -199,7 +199,7 @@ def main():
     painter.drawText(icon_pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "🎉")
     painter.end()
 
-    tray = QSystemTrayIcon(icon_pixmap, app)
+    tray = QSystemTrayIcon(QIcon(icon_pixmap), app)
     menu = QMenu()
     menu.addAction("종료").triggered.connect(app.quit)
     tray.setContextMenu(menu)
