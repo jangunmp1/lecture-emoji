@@ -33,34 +33,34 @@ _LOGIN_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>강사 화면 로그인</title>
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    *, *::before, *::after {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    body {{
       background: #080812; color: #e2e8f0;
       font-family: 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    }
-    .card {
+    }}
+    .card {{
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
       border-radius: 24px; padding: 48px 40px; width: 100%; max-width: 360px;
       display: flex; flex-direction: column; gap: 20px; text-align: center;
-    }
-    h1 { font-size: 1.3rem; color: #a78bfa; }
-    p  { font-size: 0.85rem; color: #64748b; }
-    input[type=password] {
+    }}
+    h1 {{ font-size: 1.3rem; color: #a78bfa; }}
+    p  {{ font-size: 0.85rem; color: #64748b; }}
+    input[type=password] {{
       width: 100%; background: rgba(255,255,255,0.05);
       border: 2px solid rgba(255,255,255,0.09); border-radius: 12px;
       padding: 12px 16px; color: #e2e8f0; font-size: 1rem; outline: none;
       transition: border-color 0.15s;
-    }
-    input[type=password]:focus { border-color: #a78bfa; }
-    button {
+    }}
+    input[type=password]:focus {{ border-color: #a78bfa; }}
+    button {{
       width: 100%; background: rgba(167,139,250,0.2);
       border: 2px solid rgba(167,139,250,0.5); border-radius: 12px;
       padding: 12px; color: #a78bfa; font-size: 1rem; cursor: pointer;
       transition: background 0.15s;
-    }
-    button:hover { background: rgba(167,139,250,0.35); }
-    .error { color: #f87171; font-size: 0.85rem; }
+    }}
+    button:hover {{ background: rgba(167,139,250,0.35); }}
+    .error {{ color: #f87171; font-size: 0.85rem; }}
   </style>
 </head>
 <body>
