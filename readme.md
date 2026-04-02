@@ -27,6 +27,9 @@ pip install -r requirements.txt
 
 # 서버 시작
 python app.py
+
+# 발표자 화면 암호 설정 (권장)
+PRESENTER_PASSWORD=mypassword python app.py
 ```
 
 서버 시작 시 터미널에 접속 주소가 출력됩니다.
