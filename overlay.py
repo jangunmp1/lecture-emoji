@@ -8,6 +8,7 @@
 """
 
 import sys
+import os
 import asyncio
 import json
 import random
@@ -77,13 +78,33 @@ class EmojiOverlay(QWidget):
 # ── Linux 전용 설정 ───────────────────────────────────────────────────────────
 def _setup_linux(overlay: QWidget):
     """
-    일부 Linux WM은 WindowTransparentForInput 창을 포커스 변경 시 뒤로 보냄.
-    QTimer로 주기적으로 raise_()를 호출해 항상 최상단을 유지.
+    Wayland는 앱의 Z-order 제어를 막으므로 XWayland(xcb)로 강제 실행.
+    X11 _NET_WM_STATE_ABOVE 속성을 WM에 직접 전달해 항상 최상단 유지.
     """
-    timer = QTimer()
-    timer.timeout.connect(overlay.raise_)
-    timer.start(100)
-    overlay._raise_timer = timer  # GC 방지
+    try:
+        from Xlib import display as xdisplay, X
+        from Xlib.protocol import event as xevent
+
+        def _apply():
+            d = xdisplay.Display()
+            root = d.screen().root
+            win_id = int(overlay.winId())
+            window = d.create_resource_object('window', win_id)
+
+            _NET_WM_STATE       = d.intern_atom('_NET_WM_STATE')
+            _NET_WM_STATE_ABOVE = d.intern_atom('_NET_WM_STATE_ABOVE')
+
+            ev = xevent.ClientMessage(
+                window=window,
+                client_type=_NET_WM_STATE,
+                data=(32, [1, _NET_WM_STATE_ABOVE, 0, 1, 0]),
+            )
+            root.send_event(ev, event_mask=X.SubstructureRedirectMask | X.SubstructureNotifyMask)
+            d.flush()
+
+        QTimer.singleShot(200, _apply)
+    except ImportError:
+        print("ℹ️  python-xlib 미설치 — pip install python-xlib")
 
 
 # ── macOS 전용 설정 ───────────────────────────────────────────────────────────
@@ -155,6 +176,9 @@ def main():
         ws_url = f"{scheme}://{args.host}/ws/presenter"   # 클라우드: 포트 생략 (443)
     else:
         ws_url = f"{scheme}://{args.host}:8000/ws/presenter"  # 로컬 기본값
+
+    if sys.platform.startswith("linux"):
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")  # XWayland 강제 사용
 
     app = QApplication(sys.argv)
     overlay = EmojiOverlay()

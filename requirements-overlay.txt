@@ -1,3 +1,4 @@
 PyQt6
 websockets
 pyobjc-framework-Cocoa; sys_platform == "darwin"
+python-xlib; sys_platform == "linux"
