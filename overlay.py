@@ -24,7 +24,8 @@ import websockets
 
 # ── Qt 시그널 브릿지 (asyncio 스레드 → Qt 메인 스레드) ──────────────────────
 class _Bridge(QObject):
-    emoji_received = pyqtSignal(str)
+    emoji_received    = pyqtSignal(str)
+    question_received = pyqtSignal(str)
 
 
 bridge = _Bridge()
@@ -46,7 +47,10 @@ class EmojiOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
+        self._bubbles: list[QLabel] = []
+
         bridge.emoji_received.connect(self._spawn)
+        bridge.question_received.connect(self._spawn_bubble)
 
     def _spawn(self, emoji: str):
         label = QLabel(emoji, self)
@@ -73,6 +77,37 @@ class EmojiOverlay(QWidget):
         anim.start()
 
         label._anim = anim  # GC 방지
+
+    def _spawn_bubble(self, text: str):
+        MARGIN_LEFT   = 32
+        MARGIN_BOTTOM = 32
+        BUBBLE_WIDTH  = 300
+        GAP           = 10
+
+        label = QLabel(text, self)
+        label.setWordWrap(True)
+        label.setFixedWidth(BUBBLE_WIDTH)
+        label.setFont(QFont("sans-serif", 11))
+        label.setStyleSheet("""
+            QLabel {
+                background: rgba(20, 16, 40, 220);
+                border: 1px solid rgba(167, 139, 250, 140);
+                border-radius: 16px;
+                padding: 10px 14px;
+                color: #e2e8f0;
+            }
+        """)
+        label.adjustSize()
+        new_h = label.height()
+
+        for b in self._bubbles:
+            b.move(b.x(), b.y() - new_h - GAP)
+
+        y = self.height() - MARGIN_BOTTOM - new_h
+        label.move(MARGIN_LEFT, y)
+        label.show()
+        label.raise_()
+        self._bubbles.append(label)
 
 
 # ── Linux 전용 설정 ───────────────────────────────────────────────────────────
@@ -147,6 +182,8 @@ async def _ws_loop(ws_url: str):
                         msg = json.loads(raw)
                         if msg.get("type") == "emoji":
                             bridge.emoji_received.emit(msg["emoji"])
+                        elif msg.get("type") == "question":
+                            bridge.question_received.emit(msg["text"])
                     except json.JSONDecodeError:
                         pass
         except Exception as e:

@@ -158,17 +158,9 @@
       animation: bubbleIn 0.3s ease forwards;
     }
 
-    .bubble.fade-out {
-      animation: bubbleOut 0.5s ease forwards;
-    }
-
     @keyframes bubbleIn {
       from { opacity: 0; transform: translateY(12px) scale(0.95); }
       to   { opacity: 1; transform: translateY(0)    scale(1);    }
-    }
-
-    @keyframes bubbleOut {
-      to { opacity: 0; transform: translateY(-8px) scale(0.95); }
     }
 
     /* ── Status bar ── */
@@ -241,14 +233,6 @@
     el.className = 'bubble';
     el.textContent = text;
     bubbleLayer.appendChild(el);
-
-    const STAY = 10000;
-    const timer = setTimeout(() => {
-      el.classList.add('fade-out');
-      el.addEventListener('animationend', () => el.remove(), { once: true });
-    }, STAY);
-
-    el.dataset.timer = timer;
   }
 
   let ws;
