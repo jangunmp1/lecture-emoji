@@ -81,7 +81,7 @@ class EmojiOverlay(QWidget):
         label._anim = anim  # GC 방지
 
     def _spawn_bubble(self, text: str, bubble_id: str):
-        MARGIN_LEFT   = 32
+        MARGIN_RIGHT  = 32
         MARGIN_BOTTOM = 32
         BUBBLE_WIDTH  = 300
         GAP           = 10
@@ -89,14 +89,13 @@ class EmojiOverlay(QWidget):
         label = QLabel(text, self)
         label.setWordWrap(True)
         label.setFixedWidth(BUBBLE_WIDTH)
-        label.setFont(QFont("sans-serif", 11))
+        label.setFont(QFont("sans-serif", 13))
         label.setStyleSheet("""
             QLabel {
-                background: rgba(20, 16, 40, 220);
-                border: 1px solid rgba(167, 139, 250, 140);
+                background: rgba(255, 255, 255, 190);
                 border-radius: 16px;
                 padding: 10px 14px;
-                color: #e2e8f0;
+                color: #111111;
             }
         """)
         label.adjustSize()
@@ -105,8 +104,9 @@ class EmojiOverlay(QWidget):
         for b in self._bubbles.values():
             b.move(b.x(), b.y() - new_h - GAP)
 
+        x = self.width() - MARGIN_RIGHT - BUBBLE_WIDTH
         y = self.height() - MARGIN_BOTTOM - new_h
-        label.move(MARGIN_LEFT, y)
+        label.move(x, y)
         label.show()
         label.raise_()
         self._bubbles[bubble_id] = label
@@ -123,7 +123,7 @@ class EmojiOverlay(QWidget):
         # 삭제된 말풍선보다 위에 있던 것들을 아래로 내림
         for b in self._bubbles.values():
             if b.y() < deleted_y:
-                b.move(b.x(), b.y() + deleted_h + 10)
+                b.move(b.x(), b.y() + deleted_h + 10)  # GAP=10
 
 
 # ── Linux 전용 설정 ───────────────────────────────────────────────────────────
