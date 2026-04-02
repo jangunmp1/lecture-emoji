@@ -113,8 +113,17 @@ class EmojiOverlay(QWidget):
 
     def _delete_bubble(self, bubble_id: str):
         label = self._bubbles.pop(bubble_id, None)
-        if label:
-            label.deleteLater()
+        if not label:
+            return
+
+        deleted_y = label.y()
+        deleted_h = label.height()
+        label.deleteLater()
+
+        # 삭제된 말풍선보다 위에 있던 것들을 아래로 내림
+        for b in self._bubbles.values():
+            if b.y() < deleted_y:
+                b.move(b.x(), b.y() + deleted_h + 10)
 
 
 # ── Linux 전용 설정 ───────────────────────────────────────────────────────────
