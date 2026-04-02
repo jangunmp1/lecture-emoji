@@ -74,6 +74,18 @@ class EmojiOverlay(QWidget):
         label._anim = anim  # GC 방지
 
 
+# ── Linux 전용 설정 ───────────────────────────────────────────────────────────
+def _setup_linux(overlay: QWidget):
+    """
+    일부 Linux WM은 WindowTransparentForInput 창을 포커스 변경 시 뒤로 보냄.
+    QTimer로 주기적으로 raise_()를 호출해 항상 최상단을 유지.
+    """
+    timer = QTimer()
+    timer.timeout.connect(overlay.raise_)
+    timer.start(100)
+    overlay._raise_timer = timer  # GC 방지
+
+
 # ── macOS 전용 설정 ───────────────────────────────────────────────────────────
 def _setup_macos(overlay: QWidget):
     """
@@ -150,6 +162,8 @@ def main():
 
     if sys.platform == "darwin":
         _setup_macos(overlay)
+    elif sys.platform.startswith("linux"):
+        _setup_linux(overlay)
 
     _start_ws_thread(ws_url)
 
