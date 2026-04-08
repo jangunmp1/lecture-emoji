@@ -27,7 +27,7 @@ import urllib.error
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu,
-    QDialog, QVBoxLayout, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox,
+    QDialog, QVBoxLayout, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox, QCheckBox,
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QPixmap, QColor, QPainter, QIcon
@@ -37,7 +37,7 @@ import websockets
 
 # ── 접속 정보 입력 다이얼로그 ─────────────────────────────────────────────────
 class _ConnectDialog(QDialog):
-    def __init__(self, host: str = "localhost:8000", room: str = "", password: str = "", parent=None):
+    def __init__(self, host: str = "localhost:8000", ssl: bool = False, room: str = "", password: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("강의 이모지 오버레이")
         self.setMinimumWidth(360)
@@ -60,9 +60,13 @@ class _ConnectDialog(QDialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._host_input = QLineEdit()
-        self._host_input.setPlaceholderText("예: localhost:8000 또는 192.168.1.5:8000")
+        self._host_input.setPlaceholderText("예: localhost:8000 또는 example.com")
         self._host_input.setText(host)
         form.addRow("서버 주소:", self._host_input)
+
+        self._ssl_check = QCheckBox("HTTPS/WSS 사용 (클라우드 서버)")
+        self._ssl_check.setChecked(ssl)
+        form.addRow("", self._ssl_check)
 
         self._room_input = QLineEdit()
         self._room_input.setPlaceholderText("예: ABC123")
@@ -100,8 +104,8 @@ class _ConnectDialog(QDialog):
             self._room_input.setText(upper)
             self._room_input.setCursorPosition(pos)
 
-    def get_values(self) -> tuple[str, str, str]:
-        return self._host_input.text().strip(), self._room_input.text().strip(), self._pw_input.text()
+    def get_values(self) -> tuple[str, bool, str, str]:
+        return self._host_input.text().strip(), self._ssl_check.isChecked(), self._room_input.text().strip(), self._pw_input.text()
 
 
 # ── Qt 시그널 브릿지 (asyncio 스레드 → Qt 메인 스레드) ──────────────────────
@@ -354,19 +358,20 @@ def main():
     default_host = f"{args.host}{port_part}"
 
     if not room_code or not password:
-        dlg = _ConnectDialog(host=default_host, room=room_code, password=password)
+        dlg = _ConnectDialog(host=default_host, ssl=args.ssl, room=room_code, password=password)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             sys.exit(0)
-        host_base, room_code, password = dlg.get_values()
+        host_base, use_ssl, room_code, password = dlg.get_values()
         if not host_base or not room_code or not password:
             QMessageBox.warning(None, "입력 오류", "서버 주소, 방 코드, 비밀번호를 모두 입력하세요.")
             sys.exit(0)
     else:
         host_base = default_host
+        use_ssl = args.ssl
 
     # ── URL 구성 ────────────────────────────────────────────────────────────────
-    http_scheme = "https" if args.ssl else "http"
-    ws_scheme   = "wss"   if args.ssl else "ws"
+    http_scheme = "https" if use_ssl else "http"
+    ws_scheme   = "wss"   if use_ssl else "ws"
 
     # ── HTTP 로그인 → 토큰 취득 ─────────────────────────────────────────────────
     api_url = f"{http_scheme}://{host_base}/api/room/{room_code}/login"
