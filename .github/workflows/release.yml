@@ -1,0 +1,54 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: overlay-linux
+          - os: windows-latest
+            artifact: overlay-windows.exe
+          - os: macos-latest
+            artifact: overlay-macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-overlay.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller --onefile --noconsole --name overlay overlay.py
+
+      - name: Rename artifact
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            mv dist/overlay.exe "dist/${{ matrix.artifact }}"
+          else
+            mv dist/overlay "dist/${{ matrix.artifact }}"
+          fi
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.artifact }}
+          generate_release_notes: true

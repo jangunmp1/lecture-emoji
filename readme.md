@@ -97,6 +97,20 @@ python overlay.py --host example.com --ssl --room ABC123 --password mypass
 - **자동 재연결**: 네트워크 끊김 시 자동으로 재연결 시도
 - **데스크톱 오버레이**: 화면 위에 직접 이모지를 띄우는 투명 오버레이 (macOS/Linux/Windows 지원)
 
+## 오버레이 바이너리 릴리스
+
+태그를 푸시하면 GitHub Actions가 Linux / Windows / macOS 바이너리를 자동으로 빌드해 GitHub Releases에 업로드합니다.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+빌드가 완료되면 Releases 페이지에서 각 OS용 바이너리를 내려받아 바로 실행할 수 있습니다.
+
+> macOS는 처음 실행 시 "확인되지 않은 개발자" 경고가 뜰 수 있습니다. **시스템 설정 → 개인 정보 보호 및 보안**에서 허용하세요.  
+> Windows는 SmartScreen 경고가 뜰 수 있습니다. **추가 정보 → 실행**을 선택하세요.
+
 ## 기술 스택
 
 - **백엔드**: Python, FastAPI, WebSocket
