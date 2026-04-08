@@ -184,6 +184,25 @@ class EmojiOverlay(QWidget):
         label.raise_()
         self._bubbles[bubble_id] = label
 
+    def show_room_code(self, room_code: str):
+        label = QLabel(f"방 코드  {room_code}", self)
+        font = QFont("monospace", 12)
+        font.setBold(True)
+        label.setFont(font)
+        label.setStyleSheet("""
+            QLabel {
+                background: rgba(0, 0, 0, 150);
+                color: rgba(255, 255, 255, 210);
+                border-radius: 8px;
+                padding: 6px 14px;
+            }
+        """)
+        label.adjustSize()
+        x = self.width() - label.width() - 20
+        label.move(x, 52)
+        label.show()
+        label.raise_()
+
     def _delete_bubble(self, bubble_id: str):
         label = self._bubbles.pop(bubble_id, None)
         if not label:
@@ -364,6 +383,7 @@ def main():
 
     overlay = EmojiOverlay()
     overlay.show()
+    overlay.show_room_code(room_code)
 
     if sys.platform == "darwin":
         _setup_macos(overlay)
