@@ -49,7 +49,7 @@ python app.py
 # 패키지 설치 (최초 1회)
 pip install -r requirements-overlay.txt
 
-# 오버레이 실행 — 방 코드·비밀번호 입력창이 표시됩니다
+# 오버레이 실행 — 서버 주소·방 코드·비밀번호 입력창이 표시됩니다
 python overlay.py
 
 # 인수로 직접 지정 (입력창 생략)
@@ -61,6 +61,13 @@ python overlay.py --host 192.168.x.x --room ABC123 --password mypass
 # 클라우드 서버에 연결할 때 (WSS)
 python overlay.py --host example.com --ssl --room ABC123 --password mypass
 ```
+
+실행하면 접속 정보 입력창이 표시됩니다.
+
+- **서버 주소**: 기본값 `localhost:8000`. 원격 서버라면 해당 주소로 변경
+- **HTTPS/WSS 사용**: 클라우드 서버(HTTPS)에 접속할 경우 체크
+- **방 코드**: 강사 화면에 표시된 6자리 코드
+- **비밀번호**: 방 개설 시 설정한 강의자 비밀번호
 
 오버레이는 시스템 트레이에 🎉 아이콘으로 표시되며, **우클릭 → 종료**로 닫을 수 있습니다.
 접속한 방 코드가 화면 오른쪽 상단에 표시됩니다.
@@ -99,17 +106,33 @@ python overlay.py --host example.com --ssl --room ABC123 --password mypass
 
 ## 오버레이 바이너리 릴리스
 
-태그를 푸시하면 GitHub Actions가 Linux / Windows / macOS 바이너리를 자동으로 빌드해 GitHub Releases에 업로드합니다.
+Python 없이 바로 실행할 수 있는 바이너리를 [GitHub Releases](../../releases) 페이지에서 내려받을 수 있습니다.
+
+### Linux (`overlay-linux`)
+
+```bash
+chmod +x overlay-linux
+./overlay-linux
+```
+
+### macOS (`overlay-macos.zip`)
+
+1. `overlay-macos.zip`을 내려받아 압축 해제
+2. `overlay.app`을 더블클릭
+3. "확인되지 않은 개발자" 경고가 뜨면: **시스템 설정 → 개인 정보 보호 및 보안 → 확인 없이 열기**
+
+### Windows (`overlay-windows.exe`)
+
+`overlay-windows.exe`를 더블클릭. SmartScreen 경고가 뜨면 **추가 정보 → 그래도 실행**을 클릭.
+
+---
+
+새 릴리스를 빌드하려면 태그를 푸시하면 GitHub Actions가 자동으로 빌드합니다.
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
-
-빌드가 완료되면 Releases 페이지에서 각 OS용 바이너리를 내려받아 바로 실행할 수 있습니다.
-
-> macOS는 처음 실행 시 "확인되지 않은 개발자" 경고가 뜰 수 있습니다. **시스템 설정 → 개인 정보 보호 및 보안**에서 허용하세요.  
-> Windows는 SmartScreen 경고가 뜰 수 있습니다. **추가 정보 → 실행**을 선택하세요.
 
 ## 기술 스택
 
