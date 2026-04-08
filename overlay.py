@@ -3,10 +3,10 @@
 실행 전에 app.py(서버)가 먼저 실행되어 있어야 합니다.
 
 사용법:
-    python overlay.py                             # 방 코드 입력 다이얼로그 표시
-    python overlay.py --room ABC123               # 방 코드 직접 지정
-    python overlay.py --host 192.168.x.x --room ABC123
-    python overlay.py --host example.com --ssl --room ABC123
+    python overlay.py                                        # 방 코드·비밀번호 다이얼로그 표시
+    python overlay.py --room ABC123 --password mypass        # 직접 지정
+    python overlay.py --host 192.168.x.x --room ABC123 --password mypass
+    python overlay.py --host example.com --ssl --room ABC123 --password mypass
 """
 
 import sys
@@ -16,6 +16,8 @@ import json
 import random
 import threading
 import argparse
+import urllib.request
+import urllib.error
 
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
@@ -29,7 +31,8 @@ class _Bridge(QObject):
     emoji_received    = pyqtSignal(str)
     question_received = pyqtSignal(str, str)  # text, id
     bubble_deleted    = pyqtSignal(str)        # id
-    room_not_found    = pyqtSignal()           # 잘못된 방 코드
+    room_not_found    = pyqtSignal()           # 잘못된 방 코드 (4004)
+    auth_failed       = pyqtSignal()           # 토큰 만료 (4001)
 
 
 bridge = _Bridge()
@@ -208,9 +211,14 @@ async def _ws_loop(ws_url: str):
                     except json.JSONDecodeError:
                         pass
         except websockets.exceptions.ConnectionClosedError as e:
-            if getattr(e.rcvd, 'code', None) == 4004:
-                print(f"❌ 방 코드를 찾을 수 없습니다.")
+            code = getattr(e.rcvd, 'code', None)
+            if code == 4004:
+                print("❌ 방 코드를 찾을 수 없습니다.")
                 bridge.room_not_found.emit()
+                return
+            if code == 4001:
+                print("❌ 인증 실패 — 토큰이 만료되었습니다.")
+                bridge.auth_failed.emit()
                 return
             print(f"⚠️  연결 끊김 ({e}) — 2초 후 재연결…")
             await asyncio.sleep(2)
@@ -229,10 +237,11 @@ def _start_ws_thread(ws_url: str):
 # ── 진입점 ────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="강의 이모지 오버레이")
-    parser.add_argument("--host", default="localhost", help="서버 호스트 (기본값: localhost)")
-    parser.add_argument("--port", default=None, type=int, help="서버 포트 (로컬 기본값: 8000)")
-    parser.add_argument("--ssl",  action="store_true", help="WSS 사용 (클라우드 서버 접속 시)")
-    parser.add_argument("--room", default="",          help="방 코드 (예: ABC123)")
+    parser.add_argument("--host",     default="localhost", help="서버 호스트 (기본값: localhost)")
+    parser.add_argument("--port",     default=None, type=int, help="서버 포트 (로컬 기본값: 8000)")
+    parser.add_argument("--ssl",      action="store_true",  help="WSS 사용 (클라우드 서버 접속 시)")
+    parser.add_argument("--room",     default="",           help="방 코드 (예: ABC123)")
+    parser.add_argument("--password", default="",           help="강의자 비밀번호")
     args = parser.parse_args()
 
     if sys.platform.startswith("linux"):
@@ -241,10 +250,11 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
+    from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+
     # ── 방 코드 결정 ────────────────────────────────────────────────────────────
     room_code = args.room.strip().upper()
     if not room_code:
-        from PyQt6.QtWidgets import QInputDialog
         code, ok = QInputDialog.getText(
             None, "수업 참여", "방 코드를 입력하세요 (강사 화면에서 확인):"
         )
@@ -252,14 +262,47 @@ def main():
             sys.exit(0)
         room_code = code.strip().upper()
 
-    scheme = "wss" if args.ssl else "ws"
-    if args.port:
-        base = f"{scheme}://{args.host}:{args.port}"
-    elif args.ssl:
-        base = f"{scheme}://{args.host}"        # 클라우드: 포트 생략 (443)
-    else:
-        base = f"{scheme}://{args.host}:8000"   # 로컬 기본값
-    ws_url = f"{base}/ws/presenter?room={room_code}"
+    # ── 비밀번호 결정 ───────────────────────────────────────────────────────────
+    password = args.password
+    if not password:
+        pw, ok = QInputDialog.getText(
+            None, "비밀번호 입력", f"방 '{room_code}' 강의자 비밀번호:",
+            QLineEdit.EchoMode.Password
+        )
+        if not ok or not pw:
+            sys.exit(0)
+        password = pw
+
+    # ── URL 구성 ────────────────────────────────────────────────────────────────
+    port_part   = f":{args.port}" if args.port else ("" if args.ssl else ":8000")
+    host_base   = f"{args.host}{port_part}"
+    http_scheme = "https" if args.ssl else "http"
+    ws_scheme   = "wss"   if args.ssl else "ws"
+
+    # ── HTTP 로그인 → 토큰 취득 ─────────────────────────────────────────────────
+    api_url = f"{http_scheme}://{host_base}/api/room/{room_code}/login"
+    req = urllib.request.Request(
+        api_url,
+        data=json.dumps({"password": password}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            token = json.loads(resp.read())["token"]
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            QMessageBox.critical(None, "인증 오류", "비밀번호가 틀렸습니다.")
+        elif e.code == 404:
+            QMessageBox.critical(None, "방 오류", f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요.")
+        else:
+            QMessageBox.critical(None, "서버 오류", f"서버 응답 오류: {e.code}")
+        sys.exit(1)
+    except Exception as e:
+        QMessageBox.critical(None, "연결 오류", f"서버에 연결할 수 없습니다.\n{e}")
+        sys.exit(1)
+
+    ws_url = f"{ws_scheme}://{host_base}/ws/presenter?room={room_code}&token={token}"
 
     overlay = EmojiOverlay()
     overlay.show()
@@ -285,14 +328,21 @@ def main():
     tray.show()
 
     def _on_room_not_found():
-        from PyQt6.QtWidgets import QMessageBox
         QMessageBox.critical(
             None, "방 코드 오류",
             f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요."
         )
         app.quit()
 
+    def _on_auth_failed():
+        QMessageBox.critical(
+            None, "인증 만료",
+            "서버가 재시작되어 인증이 만료되었습니다.\n오버레이를 다시 실행하세요."
+        )
+        app.quit()
+
     bridge.room_not_found.connect(_on_room_not_found)
+    bridge.auth_failed.connect(_on_auth_failed)
 
     _start_ws_thread(ws_url)
 
