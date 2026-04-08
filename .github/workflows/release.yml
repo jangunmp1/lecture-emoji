@@ -19,7 +19,7 @@ jobs:
           - os: windows-latest
             artifact: overlay-windows.exe
           - os: macos-latest
-            artifact: overlay-macos
+            artifact: overlay-macos.zip
 
     runs-on: ${{ matrix.os }}
 
@@ -35,17 +35,25 @@ jobs:
           pip install -r requirements-overlay.txt
           pip install pyinstaller
 
-      - name: Build with PyInstaller
+      - name: Build (Linux / Windows)
+        if: runner.os != 'macOS'
         run: pyinstaller --onefile --noconsole --name overlay overlay.py
 
-      - name: Rename artifact
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller --windowed --name overlay overlay.py
+          cd dist && zip -r overlay-macos.zip overlay.app
+
+      - name: Stage artifact
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             mv dist/overlay.exe "dist/${{ matrix.artifact }}"
-          else
+          elif [ "$RUNNER_OS" = "Linux" ]; then
             mv dist/overlay "dist/${{ matrix.artifact }}"
           fi
+          # macOS: zip already named correctly in build step
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
