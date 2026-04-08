@@ -43,6 +43,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           pyinstaller --windowed --name overlay --collect-all PyQt6 overlay.py
+          find dist/overlay.app -type d -name "permissions" -exec rm -rf {} + 2>/dev/null || true
           codesign --force --deep --sign - dist/overlay.app
           cd dist && zip -r overlay-macos.zip overlay.app
 
