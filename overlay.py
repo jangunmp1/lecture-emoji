@@ -3,8 +3,10 @@
 실행 전에 app.py(서버)가 먼저 실행되어 있어야 합니다.
 
 사용법:
-    python overlay.py
-    python overlay.py --host 192.168.x.x  # 원격 서버에 연결할 때
+    python overlay.py                             # 방 코드 입력 다이얼로그 표시
+    python overlay.py --room ABC123               # 방 코드 직접 지정
+    python overlay.py --host 192.168.x.x --room ABC123
+    python overlay.py --host example.com --ssl --room ABC123
 """
 
 import sys
@@ -27,6 +29,7 @@ class _Bridge(QObject):
     emoji_received    = pyqtSignal(str)
     question_received = pyqtSignal(str, str)  # text, id
     bubble_deleted    = pyqtSignal(str)        # id
+    room_not_found    = pyqtSignal()           # 잘못된 방 코드
 
 
 bridge = _Bridge()
@@ -204,6 +207,13 @@ async def _ws_loop(ws_url: str):
                             bridge.bubble_deleted.emit(msg.get("id", ""))
                     except json.JSONDecodeError:
                         pass
+        except websockets.exceptions.ConnectionClosedError as e:
+            if getattr(e.rcvd, 'code', None) == 4004:
+                print(f"❌ 방 코드를 찾을 수 없습니다.")
+                bridge.room_not_found.emit()
+                return
+            print(f"⚠️  연결 끊김 ({e}) — 2초 후 재연결…")
+            await asyncio.sleep(2)
         except Exception as e:
             print(f"⚠️  연결 끊김 ({e}) — 2초 후 재연결…")
             await asyncio.sleep(2)
@@ -221,22 +231,35 @@ def main():
     parser = argparse.ArgumentParser(description="강의 이모지 오버레이")
     parser.add_argument("--host", default="localhost", help="서버 호스트 (기본값: localhost)")
     parser.add_argument("--port", default=None, type=int, help="서버 포트 (로컬 기본값: 8000)")
-    parser.add_argument("--ssl", action="store_true", help="WSS 사용 (클라우드 서버 접속 시)")
+    parser.add_argument("--ssl",  action="store_true", help="WSS 사용 (클라우드 서버 접속 시)")
+    parser.add_argument("--room", default="",          help="방 코드 (예: ABC123)")
     args = parser.parse_args()
-
-    scheme = "wss" if args.ssl else "ws"
-    if args.port:
-        ws_url = f"{scheme}://{args.host}:{args.port}/ws/presenter"
-    elif args.ssl:
-        ws_url = f"{scheme}://{args.host}/ws/presenter"   # 클라우드: 포트 생략 (443)
-    else:
-        ws_url = f"{scheme}://{args.host}:8000/ws/presenter"  # 로컬 기본값
 
     if sys.platform.startswith("linux"):
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")  # XWayland 강제 사용
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    # ── 방 코드 결정 ────────────────────────────────────────────────────────────
+    room_code = args.room.strip().upper()
+    if not room_code:
+        from PyQt6.QtWidgets import QInputDialog
+        code, ok = QInputDialog.getText(
+            None, "수업 참여", "방 코드를 입력하세요 (강사 화면에서 확인):"
+        )
+        if not ok or not code.strip():
+            sys.exit(0)
+        room_code = code.strip().upper()
+
+    scheme = "wss" if args.ssl else "ws"
+    if args.port:
+        base = f"{scheme}://{args.host}:{args.port}"
+    elif args.ssl:
+        base = f"{scheme}://{args.host}"        # 클라우드: 포트 생략 (443)
+    else:
+        base = f"{scheme}://{args.host}:8000"   # 로컬 기본값
+    ws_url = f"{base}/ws/presenter?room={room_code}"
 
     overlay = EmojiOverlay()
     overlay.show()
@@ -260,6 +283,16 @@ def main():
     tray.setContextMenu(menu)
     tray.setToolTip("강의 이모지 오버레이")
     tray.show()
+
+    def _on_room_not_found():
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.critical(
+            None, "방 코드 오류",
+            f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요."
+        )
+        app.quit()
+
+    bridge.room_not_found.connect(_on_room_not_found)
 
     _start_ws_thread(ws_url)
 
