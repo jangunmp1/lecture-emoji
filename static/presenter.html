@@ -187,6 +187,20 @@
       to   { opacity: 1; transform: translateY(0)    scale(1);    }
     }
 
+    /* ── Room badge ── */
+    #room-badge {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    #room-badge span {
+      font-weight: 700;
+      color: #e2e8f0;
+      font-family: monospace;
+      font-size: 1.1rem;
+      letter-spacing: 0.15em;
+    }
+
     /* ── Status bar ── */
     #statusbar {
       padding: 8px 20px;
@@ -201,6 +215,7 @@
 
 <div id="header">
   <div id="title">🎓 강의 이모지 반응</div>
+  <div id="room-badge">방 코드: <span id="room-code">…</span></div>
   <div id="count-badge">
     <span class="dot"></span>
     학생 <span id="count">0</span>명 접속 중
@@ -220,34 +235,22 @@
 <div id="statusbar">서버 연결 중…</div>
 
 <script>
-  const host       = window.location.host;
-  const proto      = location.protocol === 'https:' ? 'wss' : 'ws';
-  const studentUrl = `${location.protocol}//${host}/student.html`;
-  const wsUrl      = `${proto}://${host}/ws/presenter`;
+  const params  = new URLSearchParams(location.search);
+  let roomId    = params.get('room');
 
-  document.getElementById('join-url').textContent = studentUrl;
-
-  new QRCode(document.getElementById('qrcode'), {
-    text: studentUrl,
-    width: 200, height: 200,
-    colorDark: '#000000', colorLight: '#ffffff',
-  });
-
-  const layer     = document.getElementById('emoji-layer');
+  const layer       = document.getElementById('emoji-layer');
   const bubbleLayer = document.getElementById('bubble-layer');
-  const status    = document.getElementById('statusbar');
-  const countEl   = document.getElementById('count');
+  const status      = document.getElementById('statusbar');
+  const countEl     = document.getElementById('count');
 
   function spawnEmoji(emoji) {
     const el = document.createElement('span');
     el.className = 'floater';
     el.textContent = emoji;
-
-    const x   = 8 + Math.random() * 84;          // 8%–92%
+    const x   = 8 + Math.random() * 84;
     const dur = (3.2 + Math.random() * 1.8).toFixed(2) + 's';
     el.style.left = `${x}%`;
     el.style.setProperty('--dur', dur);
-
     layer.appendChild(el);
     el.addEventListener('animationend', () => el.remove());
   }
@@ -279,7 +282,7 @@
   }
 
   let ws;
-  function connect() {
+  function connect(wsUrl) {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -296,11 +299,45 @@
 
     ws.onclose = () => {
       status.textContent = '⚠️ 연결 끊김 — 재연결 중…';
-      setTimeout(connect, 2000);
+      setTimeout(() => connect(wsUrl), 2000);
     };
   }
 
-  connect();
+  async function init() {
+    if (!roomId) {
+      try {
+        const res = await fetch('/api/room', { method: 'POST' });
+        if (!res.ok) {
+          status.textContent = '❌ 방 생성 실패 — 페이지를 새로고침하세요';
+          return;
+        }
+        const data = await res.json();
+        roomId = data.room_id;
+        history.replaceState(null, '', `?room=${roomId}`);
+      } catch {
+        status.textContent = '❌ 서버 연결 실패';
+        return;
+      }
+    }
+
+    const host       = window.location.host;
+    const proto      = location.protocol === 'https:' ? 'wss' : 'ws';
+    const studentUrl = `${location.protocol}//${host}/student.html?room=${roomId}`;
+    const wsUrl      = `${proto}://${host}/ws/presenter?room=${roomId}`;
+
+    document.getElementById('room-code').textContent = roomId;
+    document.getElementById('join-url').textContent = studentUrl;
+
+    new QRCode(document.getElementById('qrcode'), {
+      text: studentUrl,
+      width: 200, height: 200,
+      colorDark: '#000000', colorLight: '#ffffff',
+    });
+
+    connect(wsUrl);
+  }
+
+  init();
 </script>
 </body>
 </html>

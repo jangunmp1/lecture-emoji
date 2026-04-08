@@ -184,6 +184,80 @@
       text-align: right;
     }
 
+    /* ── Room entry ── */
+    #room-entry {
+      display: none;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 20px;
+    }
+
+    .entry-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 40px 32px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .entry-card h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .entry-card .entry-hint {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    #room-input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #e2e8f0;
+      font-size: 1.6rem;
+      font-family: monospace;
+      letter-spacing: 0.2em;
+      text-align: center;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #room-input:focus { border-color: var(--accent); }
+
+    #room-join {
+      width: 100%;
+      background: var(--accent-dim);
+      border: 2px solid rgba(167,139,250,0.4);
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--accent);
+      font-size: 1rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #room-join:active { background: rgba(167,139,250,0.3); }
+
+    .entry-error {
+      color: #f87171;
+      font-size: 0.85rem;
+    }
+
     /* ── Status ── */
     #statusbar {
       font-size: 0.78rem;
@@ -199,6 +273,20 @@
   <h1>🎓 강의 반응</h1>
   <div id="count-text">참여자 <span id="count">0</span>명</div>
 </header>
+
+<div id="room-entry">
+  <div class="entry-card">
+    <div style="font-size:2.5rem">🎓</div>
+    <h2>수업 참여</h2>
+    <p class="entry-hint">강사 화면의 방 코드를 입력하세요</p>
+    <input id="room-input" type="text" maxlength="6" placeholder="ABC123"
+           autocomplete="off" autocapitalize="characters" spellcheck="false" />
+    <button id="room-join">참여하기</button>
+    <p id="room-error" class="entry-error" style="display:none">
+      방 코드를 찾을 수 없습니다. 다시 확인해주세요.
+    </p>
+  </div>
+</div>
 
 <div id="emoji-grid">
   <button class="emoji-btn" data-emoji="👍">👍</button>
@@ -227,15 +315,40 @@
 <div id="big-emoji"></div>
 
 <script>
-  const COOLDOWN = 700; // ms
+  const COOLDOWN = 700;
   const host   = window.location.host;
   const proto  = location.protocol === 'https:' ? 'wss' : 'ws';
-  const wsUrl  = `${proto}://${host}/ws/student`;
+
+  const params = new URLSearchParams(location.search);
+  const roomId = params.get('room') ? params.get('room').toUpperCase() : null;
 
   let ws;
   let canSend = true;
 
+  // ── Room entry ──
+  function showRoomEntry(showError = false) {
+    document.getElementById('room-entry').style.display      = 'flex';
+    document.getElementById('emoji-grid').style.display      = 'none';
+    document.getElementById('cooldown-track').style.display  = 'none';
+    document.getElementById('question-area').style.display   = 'none';
+    document.getElementById('statusbar').style.display       = 'none';
+    if (showError) document.getElementById('room-error').style.display = 'block';
+  }
+
+  const roomJoinBtn = document.getElementById('room-join');
+  const roomInput   = document.getElementById('room-input');
+
+  function joinRoom() {
+    const code = roomInput.value.trim().toUpperCase();
+    if (code.length >= 1) location.href = `?room=${code}`;
+  }
+
+  roomJoinBtn.addEventListener('click', joinRoom);
+  roomInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
+
+  // ── WebSocket ──
   function connect() {
+    const wsUrl = `${proto}://${host}/ws/student?room=${roomId}`;
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -247,14 +360,23 @@
       if (msg.type === 'count') document.getElementById('count').textContent = msg.count;
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      if (event.code === 4004) {
+        showRoomEntry(true);
+        return;
+      }
       document.getElementById('statusbar').textContent = '⚠️ 연결 끊김 — 재연결 중…';
       setTimeout(connect, 2000);
     };
   }
 
-  connect();
+  if (!roomId) {
+    showRoomEntry();
+  } else {
+    connect();
+  }
 
+  // ── Emoji buttons ──
   document.querySelectorAll('.emoji-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!canSend || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -262,15 +384,11 @@
       const emoji = btn.dataset.emoji;
       ws.send(JSON.stringify({ type: 'emoji', emoji }));
 
-      // Button flash
       btn.classList.remove('flash');
-      void btn.offsetWidth; // reflow
+      void btn.offsetWidth;
       btn.classList.add('flash');
 
-      // Big emoji feedback
       showBig(emoji);
-
-      // Cooldown
       startCooldown();
     });
   });
@@ -283,9 +401,9 @@
   }
 
   // ── Question ──
-  const qInput  = document.getElementById('question-input');
-  const qSend   = document.getElementById('question-send');
-  const qCount  = document.getElementById('char-count');
+  const qInput = document.getElementById('question-input');
+  const qSend  = document.getElementById('question-send');
+  const qCount = document.getElementById('char-count');
 
   qInput.addEventListener('input', () => {
     qCount.textContent = `${qInput.value.length} / 100`;

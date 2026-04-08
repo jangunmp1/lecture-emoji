@@ -1,12 +1,14 @@
 import uvicorn
 import json
 import os
+import random
 import socket
+import string
 import hmac
 import hashlib
 import secrets
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Cookie, Form
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Cookie, Form, Query
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
@@ -158,46 +160,76 @@ class ConnectionManager:
                 pass
 
 
-manager = ConnectionManager()
+# ── 방(Room) 관리 ─────────────────────────────────────────────────────────────
+rooms: dict[str, ConnectionManager] = {}
+
+
+def generate_room_id() -> str:
+    chars = string.ascii_uppercase + string.digits
+    while True:
+        rid = ''.join(random.choices(chars, k=6))
+        if rid not in rooms:
+            return rid
+
+
+@app.post("/api/room")
+async def create_room(presenter_token: str | None = Cookie(default=None)):
+    if not _is_authorized(presenter_token):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    room_id = generate_room_id()
+    rooms[room_id] = ConnectionManager()
+    return {"room_id": room_id}
 
 
 @app.websocket("/ws/presenter")
-async def presenter_ws(ws: WebSocket):
-    await manager.connect_presenter(ws)
+async def presenter_ws(ws: WebSocket, room: str = Query(default="")):
+    room = room.upper().strip()[:6]
+    if not room or room not in rooms:
+        await ws.accept()
+        await ws.close(code=4004)
+        return
+    mgr = rooms[room]
+    await mgr.connect_presenter(ws)
     try:
         while True:
             data = await ws.receive_text()
             try:
                 msg = json.loads(data)
                 if msg.get("type") == "delete_bubble" and msg.get("id"):
-                    await manager.broadcast_to_presenters({
+                    await mgr.broadcast_to_presenters({
                         "type": "delete_bubble",
                         "id": str(msg["id"])[:64],
                     })
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
-        await manager.disconnect(ws)
+        await mgr.disconnect(ws)
 
 
 @app.websocket("/ws/student")
-async def student_ws(ws: WebSocket):
-    await manager.connect_student(ws)
+async def student_ws(ws: WebSocket, room: str = Query(default="")):
+    room = room.upper().strip()[:6]
+    if not room or room not in rooms:
+        await ws.accept()
+        await ws.close(code=4004)
+        return
+    mgr = rooms[room]
+    await mgr.connect_student(ws)
     try:
         while True:
             data = await ws.receive_text()
             try:
                 msg = json.loads(data)
                 if msg.get("type") == "emoji" and msg.get("emoji"):
-                    await manager.send_emoji_to_presenters(msg["emoji"])
+                    await mgr.send_emoji_to_presenters(msg["emoji"])
                 elif msg.get("type") == "question" and msg.get("text"):
                     text = str(msg["text"])[:100]
                     bubble_id = str(msg.get("id", ""))[:64]
-                    await manager.send_question_to_presenters(text, bubble_id)
+                    await mgr.send_question_to_presenters(text, bubble_id)
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
-        await manager.disconnect(ws)
+        await mgr.disconnect(ws)
 
 
 @app.get("/presenter.html")
