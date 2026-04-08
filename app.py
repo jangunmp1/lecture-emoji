@@ -8,7 +8,7 @@ import hmac
 import hashlib
 import secrets
 from dataclasses import dataclass, field
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Header
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -163,6 +163,20 @@ async def get_room_info(room_id: str):
     if not r:
         return JSONResponse({"error": "room not found"}, status_code=404)
     return {"title": r.title}
+
+
+@app.delete("/api/room/{room_id}")
+async def delete_room(room_id: str, authorization: str = Header(default="")):
+    room_id = room_id.upper().strip()[:6]
+    r = rooms.get(room_id)
+    if not r:
+        return JSONResponse({"error": "room not found"}, status_code=404)
+    token = authorization.removeprefix("Bearer ").strip()
+    expected = _room_token(room_id, r.password)
+    if not token or not hmac.compare_digest(token, expected):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    del rooms[room_id]
+    return {"ok": True}
 
 
 @app.websocket("/ws/presenter")
