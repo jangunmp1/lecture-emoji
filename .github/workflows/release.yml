@@ -43,7 +43,16 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           pyinstaller --windowed --name overlay --collect-all PyQt6 overlay.py
-          find dist/overlay.app -type d -name "permissions" -exec rm -rf {} + 2>/dev/null || true
+
+          # qt.conf: Qt가 CFBundleCopyBundleURL 대신 번들 내 경로를 사용하도록 강제
+          # Contents/Resources/qt.conf → Prefix = Contents/, Plugins = Contents/Frameworks/PyQt6/Qt6/plugins
+          mkdir -p dist/overlay.app/Contents/Resources
+          printf '[Paths]\nPlugins = Frameworks/PyQt6/Qt6/plugins\n' \
+            > dist/overlay.app/Contents/Resources/qt.conf
+
+          # permissions 플러그인 삭제 (안전망: qt.conf로 격리되더라도 아예 제거)
+          find dist/overlay.app -name "*permission*" -delete 2>/dev/null || true
+
           codesign --force --deep --sign - dist/overlay.app
           cd dist && zip -r overlay-macos.zip overlay.app
 
