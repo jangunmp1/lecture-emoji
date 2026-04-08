@@ -3,8 +3,8 @@
 실행 전에 app.py(서버)가 먼저 실행되어 있어야 합니다.
 
 사용법:
-    python overlay.py                                        # 방 코드·비밀번호 다이얼로그 표시
-    python overlay.py --room ABC123 --password mypass        # 직접 지정
+    python overlay.py                                        # 접속 정보 입력창 표시
+    python overlay.py --room ABC123 --password mypass        # 인수로 직접 지정 (창 생략)
     python overlay.py --host 192.168.x.x --room ABC123 --password mypass
     python overlay.py --host example.com --ssl --room ABC123 --password mypass
 """
@@ -19,11 +19,78 @@ import argparse
 import urllib.request
 import urllib.error
 
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu,
+    QDialog, QVBoxLayout, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox,
+)
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QPixmap, QColor, QPainter, QIcon
 
 import websockets
+
+
+# ── 접속 정보 입력 다이얼로그 ─────────────────────────────────────────────────
+class _ConnectDialog(QDialog):
+    def __init__(self, room: str = "", password: str = "", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("강의 이모지 오버레이")
+        self.setMinimumWidth(340)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        layout.setContentsMargins(28, 28, 28, 20)
+
+        title = QLabel("🎓 수업 연결")
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._room_input = QLineEdit()
+        self._room_input.setPlaceholderText("예: ABC123")
+        self._room_input.setMaxLength(6)
+        if room:
+            self._room_input.setText(room.upper())
+        self._room_input.textEdited.connect(self._force_upper)
+        form.addRow("방 코드:", self._room_input)
+
+        self._pw_input = QLineEdit()
+        self._pw_input.setPlaceholderText("강의자 비밀번호")
+        self._pw_input.setEchoMode(QLineEdit.EchoMode.Password)
+        if password:
+            self._pw_input.setText(password)
+        self._pw_input.returnPressed.connect(self.accept)
+        form.addRow("비밀번호:", self._pw_input)
+
+        layout.addLayout(form)
+
+        btn_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btn_box.button(QDialogButtonBox.StandardButton.Ok).setText("연결")
+        btn_box.button(QDialogButtonBox.StandardButton.Cancel).setText("취소")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+        (self._pw_input if room else self._room_input).setFocus()
+
+    def _force_upper(self, text: str):
+        upper = text.upper()
+        if text != upper:
+            pos = self._room_input.cursorPosition()
+            self._room_input.setText(upper)
+            self._room_input.setCursorPosition(pos)
+
+    def get_values(self) -> tuple[str, str]:
+        return self._room_input.text().strip(), self._pw_input.text()
 
 
 # ── Qt 시그널 브릿지 (asyncio 스레드 → Qt 메인 스레드) ──────────────────────
@@ -250,28 +317,18 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
-    from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
-
-    # ── 방 코드 결정 ────────────────────────────────────────────────────────────
+    # ── 접속 정보 결정 ──────────────────────────────────────────────────────────
     room_code = args.room.strip().upper()
-    if not room_code:
-        code, ok = QInputDialog.getText(
-            None, "수업 참여", "방 코드를 입력하세요 (강사 화면에서 확인):"
-        )
-        if not ok or not code.strip():
-            sys.exit(0)
-        room_code = code.strip().upper()
+    password  = args.password
 
-    # ── 비밀번호 결정 ───────────────────────────────────────────────────────────
-    password = args.password
-    if not password:
-        pw, ok = QInputDialog.getText(
-            None, "비밀번호 입력", f"방 '{room_code}' 강의자 비밀번호:",
-            QLineEdit.EchoMode.Password
-        )
-        if not ok or not pw:
+    if not room_code or not password:
+        dlg = _ConnectDialog(room=room_code, password=password)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             sys.exit(0)
-        password = pw
+        room_code, password = dlg.get_values()
+        if not room_code or not password:
+            QMessageBox.warning(None, "입력 오류", "방 코드와 비밀번호를 모두 입력하세요.")
+            sys.exit(0)
 
     # ── URL 구성 ────────────────────────────────────────────────────────────────
     port_part   = f":{args.port}" if args.port else ("" if args.ssl else ":8000")
@@ -294,7 +351,8 @@ def main():
         if e.code == 401:
             QMessageBox.critical(None, "인증 오류", "비밀번호가 틀렸습니다.")
         elif e.code == 404:
-            QMessageBox.critical(None, "방 오류", f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요.")
+            QMessageBox.critical(None, "방 오류",
+                f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요.")
         else:
             QMessageBox.critical(None, "서버 오류", f"서버 응답 오류: {e.code}")
         sys.exit(1)
@@ -328,17 +386,13 @@ def main():
     tray.show()
 
     def _on_room_not_found():
-        QMessageBox.critical(
-            None, "방 코드 오류",
-            f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요."
-        )
+        QMessageBox.critical(None, "방 코드 오류",
+            f"방 코드 '{room_code}'를 찾을 수 없습니다.\n강사가 수업을 먼저 시작했는지 확인하세요.")
         app.quit()
 
     def _on_auth_failed():
-        QMessageBox.critical(
-            None, "인증 만료",
-            "서버가 재시작되어 인증이 만료되었습니다.\n오버레이를 다시 실행하세요."
-        )
+        QMessageBox.critical(None, "인증 만료",
+            "서버가 재시작되어 인증이 만료되었습니다.\n오버레이를 다시 실행하세요.")
         app.quit()
 
     bridge.room_not_found.connect(_on_room_not_found)
