@@ -209,6 +209,23 @@
       flex-shrink: 0;
     }
 
+    #exit-btn {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 0.85rem;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    #exit-btn:hover {
+      color: #94a3b8;
+      background: rgba(255,255,255,0.06);
+    }
+
     #title {
       font-size: 1.25rem;
       font-weight: 700;
@@ -427,6 +444,7 @@
 <!-- ── View 3: 강사 화면 ── -->
 <div id="view-presenter">
   <div id="header">
+    <button id="exit-btn">← 목록</button>
     <div id="title">🎓 강의 이모지 반응</div>
     <div id="room-badge">방 코드: <span id="room-code">…</span></div>
     <div id="count-badge">
@@ -639,6 +657,15 @@
     const el = bubbleLayer.querySelector(`[data-id="${CSS.escape(id)}"]`);
     if (el) el.remove();
   }
+
+  document.getElementById('exit-btn').addEventListener('click', () => {
+    if (ws) ws.close();
+    sessionStorage.removeItem(`token_${roomId}`);
+    roomId = null;
+    history.replaceState(null, '', location.pathname);
+    showView('list');
+    loadRoomList();
+  });
 
   function connectWS(rId, token) {
     const host  = window.location.host;

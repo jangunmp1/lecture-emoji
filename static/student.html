@@ -22,22 +22,48 @@
     /* ── Header ── */
     header {
       width: 100%;
-      padding: 22px 20px 16px;
-      text-align: center;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       background: rgba(255,255,255,0.04);
       border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #header-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
     }
 
     header h1 {
       font-size: 1.35rem;
       font-weight: 700;
       color: var(--accent);
-      margin-bottom: 6px;
     }
 
     #count-text {
       font-size: 0.82rem;
       color: #64748b;
+    }
+
+    #exit-btn {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 0.85rem;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+      transition: color 0.15s, background 0.15s;
+      visibility: hidden;
+    }
+
+    #exit-btn:hover {
+      color: #94a3b8;
+      background: rgba(255,255,255,0.06);
     }
 
     /* ── Emoji grid ── */
@@ -311,8 +337,12 @@
 <body>
 
 <header>
-  <h1>🎓 강의 반응</h1>
-  <div id="count-text">참여자 <span id="count">0</span>명</div>
+  <div style="width:72px"></div>
+  <div id="header-center">
+    <h1>🎓 강의 반응</h1>
+    <div id="count-text">참여자 <span id="count">0</span>명</div>
+  </div>
+  <button id="exit-btn">나가기 →</button>
 </header>
 
 <div id="room-entry">
@@ -378,12 +408,22 @@
   // ── Room entry ──────────────────────────────────────────────────────────────
   let selectedRoomId = null;
 
+  const exitBtn = document.getElementById('exit-btn');
+
+  exitBtn.addEventListener('click', () => {
+    if (ws) ws.close();
+    history.replaceState(null, '', location.pathname);
+    showRoomEntry();
+    loadRoomList();
+  });
+
   function showRoomEntry() {
     document.getElementById('room-entry').style.display     = 'flex';
     document.getElementById('emoji-grid').style.display     = 'none';
     document.getElementById('cooldown-track').style.display = 'none';
     document.getElementById('question-area').style.display  = 'none';
     document.getElementById('statusbar').style.display      = 'none';
+    exitBtn.style.visibility = 'hidden';
   }
 
   function showPanel(name) {
@@ -449,6 +489,7 @@
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      exitBtn.style.visibility = 'visible';
       document.getElementById('statusbar').textContent = '✅ 연결됨 — 이모지를 눌러보세요!';
     };
 
