@@ -151,6 +151,11 @@ async def login_room(room_id: str, body: LoginRoomBody):
     return {"token": token}
 
 
+@app.get("/api/rooms")
+async def list_rooms():
+    return [{"room_id": rid, "title": r.title} for rid, r in rooms.items()]
+
+
 @app.get("/api/room/{room_id}")
 async def get_room_info(room_id: str):
     room_id = room_id.upper().strip()[:6]

@@ -258,6 +258,47 @@
       font-size: 0.85rem;
     }
 
+    /* ── Room list (student) ── */
+    .room-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .room-item {
+      width: 100%;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      color: #e2e8f0;
+      font-family: inherit;
+      font-size: 1rem;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .room-item:active {
+      background: rgba(167,139,250,0.15);
+      border-color: rgba(167,139,250,0.4);
+    }
+
+    .back-link {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 0.82rem;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0;
+      transition: color 0.15s;
+    }
+
+    .back-link:hover { color: #94a3b8; }
+
     /* ── Status ── */
     #statusbar {
       font-size: 0.78rem;
@@ -275,16 +316,25 @@
 </header>
 
 <div id="room-entry">
-  <div class="entry-card">
-    <div style="font-size:2.5rem">🎓</div>
-    <h2>수업 참여</h2>
+  <!-- 패널 1: 수업 목록 -->
+  <div id="panel-list" class="entry-card" style="max-width:420px">
+    <div style="font-size:2rem">🎓</div>
+    <h2>수업 목록</h2>
+    <div id="student-room-list" class="room-list"></div>
+    <p id="student-no-rooms" class="entry-hint" style="display:none">개설된 수업이 없습니다</p>
+  </div>
+
+  <!-- 패널 2: 방 코드 입력 -->
+  <div id="panel-code" class="entry-card" style="display:none">
+    <h2 id="panel-room-title">수업 참여</h2>
     <p class="entry-hint">강사 화면의 방 코드를 입력하세요</p>
     <input id="room-input" type="text" maxlength="6" placeholder="ABC123"
            autocomplete="off" autocapitalize="characters" spellcheck="false" />
     <button id="room-join">참여하기</button>
     <p id="room-error" class="entry-error" style="display:none">
-      방 코드를 찾을 수 없습니다. 다시 확인해주세요.
+      방 코드가 올바르지 않습니다. 다시 확인해주세요.
     </p>
+    <button id="back-to-list" class="back-link">← 다른 수업 선택</button>
   </div>
 </div>
 
@@ -325,26 +375,73 @@
   let ws;
   let canSend = true;
 
-  // ── Room entry ──
-  function showRoomEntry(showError = false) {
-    document.getElementById('room-entry').style.display      = 'flex';
-    document.getElementById('emoji-grid').style.display      = 'none';
-    document.getElementById('cooldown-track').style.display  = 'none';
-    document.getElementById('question-area').style.display   = 'none';
-    document.getElementById('statusbar').style.display       = 'none';
-    if (showError) document.getElementById('room-error').style.display = 'block';
+  // ── Room entry ──────────────────────────────────────────────────────────────
+  let selectedRoomId = null;
+
+  function showRoomEntry() {
+    document.getElementById('room-entry').style.display     = 'flex';
+    document.getElementById('emoji-grid').style.display     = 'none';
+    document.getElementById('cooldown-track').style.display = 'none';
+    document.getElementById('question-area').style.display  = 'none';
+    document.getElementById('statusbar').style.display      = 'none';
   }
 
-  const roomJoinBtn = document.getElementById('room-join');
-  const roomInput   = document.getElementById('room-input');
+  function showPanel(name) {
+    document.getElementById('panel-list').style.display = name === 'list' ? 'flex' : 'none';
+    document.getElementById('panel-code').style.display = name === 'code' ? 'flex' : 'none';
+    if (name === 'code') document.getElementById('room-input').focus();
+  }
+
+  async function loadRoomList() {
+    const listEl    = document.getElementById('student-room-list');
+    const noRoomsEl = document.getElementById('student-no-rooms');
+    listEl.innerHTML = '';
+    try {
+      const res  = await fetch('/api/rooms');
+      const data = await res.json();
+      if (!data.length) {
+        noRoomsEl.style.display = 'block';
+        return;
+      }
+      noRoomsEl.style.display = 'none';
+      data.forEach(room => {
+        const btn = document.createElement('button');
+        btn.className = 'room-item';
+        btn.textContent = room.title;
+        btn.addEventListener('click', () => {
+          selectedRoomId = room.room_id;
+          document.getElementById('panel-room-title').textContent = `🔒 ${room.title}`;
+          document.getElementById('room-input').value = '';
+          document.getElementById('room-error').style.display = 'none';
+          showPanel('code');
+        });
+        listEl.appendChild(btn);
+      });
+    } catch {
+      noRoomsEl.textContent = '수업 목록을 불러올 수 없습니다.';
+      noRoomsEl.style.display = 'block';
+    }
+  }
 
   function joinRoom() {
-    const code = roomInput.value.trim().toUpperCase();
-    if (code.length >= 1) location.href = `?room=${code}`;
+    const code  = document.getElementById('room-input').value.trim().toUpperCase();
+    const errEl = document.getElementById('room-error');
+    if (!code) return;
+    if (code !== selectedRoomId) {
+      errEl.style.display = 'block';
+      return;
+    }
+    location.href = `?room=${code}`;
   }
 
-  roomJoinBtn.addEventListener('click', joinRoom);
-  roomInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
+  document.getElementById('room-join').addEventListener('click', joinRoom);
+  document.getElementById('room-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinRoom();
+  });
+  document.getElementById('back-to-list').addEventListener('click', () => {
+    selectedRoomId = null;
+    showPanel('list');
+  });
 
   // ── WebSocket ──
   function connect() {
@@ -362,7 +459,8 @@
 
     ws.onclose = (event) => {
       if (event.code === 4004) {
-        showRoomEntry(true);
+        showRoomEntry();
+        loadRoomList();
         return;
       }
       document.getElementById('statusbar').textContent = '⚠️ 연결 끊김 — 재연결 중…';
@@ -372,6 +470,7 @@
 
   if (!roomId) {
     showRoomEntry();
+    loadRoomList();
   } else {
     connect();
   }
