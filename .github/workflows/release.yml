@@ -42,7 +42,7 @@ jobs:
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: |
-          pyinstaller --windowed --name overlay overlay.py
+          pyinstaller --windowed --name overlay --collect-all PyQt6 overlay.py
           cd dist && zip -r overlay-macos.zip overlay.app
 
       - name: Stage artifact
