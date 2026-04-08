@@ -18,6 +18,132 @@
       flex-direction: column;
     }
 
+    /* ── Shared form views ── */
+    .view-form {
+      flex: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .form-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-card h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #a78bfa;
+      text-align: center;
+    }
+
+    .form-card .subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      text-align: center;
+      margin-top: -8px;
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-field label {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .form-field input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.09);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #e2e8f0;
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-field input:focus { border-color: #a78bfa; }
+
+    .form-btn {
+      width: 100%;
+      background: rgba(167,139,250,0.15);
+      border: 2px solid rgba(167,139,250,0.4);
+      border-radius: 12px;
+      padding: 13px;
+      color: #a78bfa;
+      font-size: 1rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 4px;
+    }
+
+    .form-btn:hover    { background: rgba(167,139,250,0.28); }
+    .form-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .form-error {
+      font-size: 0.85rem;
+      color: #f87171;
+      text-align: center;
+      display: none;
+    }
+
+    .form-link {
+      font-size: 0.82rem;
+      color: #475569;
+      text-align: center;
+      cursor: pointer;
+      transition: color 0.15s;
+      background: none;
+      border: none;
+      font-family: inherit;
+      padding: 0;
+    }
+
+    .form-link:hover { color: #94a3b8; }
+
+    /* login view — room code display */
+    .room-code-display {
+      background: rgba(167,139,250,0.08);
+      border: 1px solid rgba(167,139,250,0.2);
+      border-radius: 10px;
+      padding: 10px 16px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+
+    .room-code-display span {
+      font-family: monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Presenter view ── */
+    #view-presenter {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
     /* ── Header ── */
     #header {
       display: flex;
@@ -34,6 +160,19 @@
       font-weight: 700;
       color: #a78bfa;
       letter-spacing: -0.01em;
+    }
+
+    #room-badge {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    #room-badge span {
+      font-weight: 700;
+      color: #e2e8f0;
+      font-family: monospace;
+      font-size: 1.1rem;
+      letter-spacing: 0.15em;
     }
 
     #count-badge {
@@ -187,20 +326,6 @@
       to   { opacity: 1; transform: translateY(0)    scale(1);    }
     }
 
-    /* ── Room badge ── */
-    #room-badge {
-      font-size: 0.85rem;
-      color: #64748b;
-    }
-
-    #room-badge span {
-      font-weight: 700;
-      color: #e2e8f0;
-      font-family: monospace;
-      font-size: 1.1rem;
-      letter-spacing: 0.15em;
-    }
-
     /* ── Status bar ── */
     #statusbar {
       padding: 8px 20px;
@@ -213,31 +338,181 @@
 </head>
 <body>
 
-<div id="header">
-  <div id="title">🎓 강의 이모지 반응</div>
-  <div id="room-badge">방 코드: <span id="room-code">…</span></div>
-  <div id="count-badge">
-    <span class="dot"></span>
-    학생 <span id="count">0</span>명 접속 중
+<!-- ── View 1: 방 개설 ── -->
+<div id="view-create" class="view-form">
+  <div class="form-card">
+    <h1>🎓 새 수업 시작</h1>
+    <p class="subtitle">방 제목과 비밀번호를 설정하세요</p>
+
+    <div class="form-field">
+      <label for="create-title">방 제목</label>
+      <input id="create-title" type="text" maxlength="50"
+             placeholder="예: 인공지능 개론" autocomplete="off" />
+    </div>
+
+    <div class="form-field">
+      <label for="create-password">강의자 비밀번호</label>
+      <input id="create-password" type="password"
+             placeholder="비밀번호 설정" autocomplete="new-password" />
+    </div>
+
+    <button id="create-btn" class="form-btn">방 개설하기</button>
+    <p id="create-error" class="form-error"></p>
   </div>
 </div>
 
-<div id="main">
-  <div id="join-card">
-    <h2>학생들에게 아래 QR코드 또는 주소를 공유하세요</h2>
-    <div id="qrcode"></div>
-    <div id="join-url">연결 중…</div>
+<!-- ── View 2: 비밀번호 입력 ── -->
+<div id="view-login" class="view-form">
+  <div class="form-card">
+    <h1 id="login-room-title">🔒 강의 입장</h1>
+    <div class="room-code-display">방 코드: <span id="login-room-code">…</span></div>
+    <p class="subtitle">강의자 비밀번호를 입력하세요</p>
+
+    <div class="form-field">
+      <label for="login-password">비밀번호</label>
+      <input id="login-password" type="password"
+             placeholder="비밀번호" autocomplete="current-password" />
+    </div>
+
+    <button id="login-btn" class="form-btn">입장</button>
+    <p id="login-error" class="form-error"></p>
+    <button class="form-link" id="new-room-link">새 방 개설하기 →</button>
   </div>
 </div>
 
-<div id="emoji-layer"></div>
-<div id="bubble-layer"></div>
-<div id="statusbar">서버 연결 중…</div>
+<!-- ── View 3: 강사 화면 ── -->
+<div id="view-presenter">
+  <div id="header">
+    <div id="title">🎓 강의 이모지 반응</div>
+    <div id="room-badge">방 코드: <span id="room-code">…</span></div>
+    <div id="count-badge">
+      <span class="dot"></span>
+      학생 <span id="count">0</span>명 접속 중
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="join-card">
+      <h2>학생들에게 아래 QR코드 또는 주소를 공유하세요</h2>
+      <div id="qrcode"></div>
+      <div id="join-url">연결 중…</div>
+    </div>
+  </div>
+
+  <div id="emoji-layer"></div>
+  <div id="bubble-layer"></div>
+  <div id="statusbar">서버 연결 중…</div>
+</div>
 
 <script>
-  const params  = new URLSearchParams(location.search);
-  let roomId    = params.get('room');
+  // ── 상태 ──────────────────────────────────────────────────────────────────
+  const params = new URLSearchParams(location.search);
+  let roomId   = params.get('room') ? params.get('room').toUpperCase() : null;
+  let ws;
 
+  // ── 뷰 전환 ────────────────────────────────────────────────────────────────
+  function showView(name) {
+    document.getElementById('view-create').style.display   = name === 'create'    ? 'flex' : 'none';
+    document.getElementById('view-login').style.display    = name === 'login'     ? 'flex' : 'none';
+    document.getElementById('view-presenter').style.display = name === 'presenter' ? 'flex' : 'none';
+
+    if (name === 'create')    document.getElementById('create-title').focus();
+    if (name === 'login')     document.getElementById('login-password').focus();
+  }
+
+  // ── 방 개설 ────────────────────────────────────────────────────────────────
+  document.getElementById('create-btn').addEventListener('click', createRoom);
+  document.getElementById('create-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') createRoom();
+  });
+
+  async function createRoom() {
+    const title    = document.getElementById('create-title').value.trim();
+    const password = document.getElementById('create-password').value;
+    const errEl    = document.getElementById('create-error');
+    errEl.style.display = 'none';
+
+    if (!title) {
+      errEl.textContent = '방 제목을 입력하세요.';
+      errEl.style.display = 'block';
+      document.getElementById('create-title').focus();
+      return;
+    }
+    if (!password) {
+      errEl.textContent = '비밀번호를 입력하세요.';
+      errEl.style.display = 'block';
+      document.getElementById('create-password').focus();
+      return;
+    }
+
+    const btn = document.getElementById('create-btn');
+    btn.disabled = true;
+
+    try {
+      const res  = await fetch('/api/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '방 개설 실패');
+
+      sessionStorage.setItem(`token_${data.room_id}`, data.token);
+      location.href = `?room=${data.room_id}`;
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+    }
+  }
+
+  // ── 비밀번호 입력 ──────────────────────────────────────────────────────────
+  document.getElementById('login-btn').addEventListener('click', loginRoom);
+  document.getElementById('login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loginRoom();
+  });
+  document.getElementById('new-room-link').addEventListener('click', () => {
+    history.pushState(null, '', location.pathname);
+    roomId = null;
+    showView('create');
+  });
+
+  async function loginRoom() {
+    const password = document.getElementById('login-password').value;
+    const errEl    = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    if (!password) {
+      errEl.textContent = '비밀번호를 입력하세요.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true;
+
+    try {
+      const res  = await fetch(`/api/room/${roomId}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (res.status === 401) throw new Error('비밀번호가 틀렸습니다.');
+      if (res.status === 404) throw new Error('방을 찾을 수 없습니다.');
+      if (!res.ok) throw new Error(data.error || '로그인 실패');
+
+      sessionStorage.setItem(`token_${roomId}`, data.token);
+      showView('presenter');
+      startPresenter(roomId, data.token);
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+    }
+  }
+
+  // ── 강사 화면 ──────────────────────────────────────────────────────────────
   const layer       = document.getElementById('emoji-layer');
   const bubbleLayer = document.getElementById('bubble-layer');
   const status      = document.getElementById('statusbar');
@@ -256,7 +531,7 @@
   }
 
   function spawnBubble(text, id) {
-    const el = document.createElement('div');
+    const el   = document.createElement('div');
     el.className = 'bubble';
     el.dataset.id = id;
 
@@ -281,9 +556,10 @@
     if (el) el.remove();
   }
 
-  let ws;
-  function connect(wsUrl) {
-    ws = new WebSocket(wsUrl);
+  function connectWS(rId, token) {
+    const host  = window.location.host;
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${host}/ws/presenter?room=${rId}&token=${token}`);
 
     ws.onopen = () => {
       status.textContent = '✅ 서버 연결됨';
@@ -297,44 +573,79 @@
       if (msg.type === 'delete_bubble') deleteBubble(msg.id);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      if (event.code === 4001) {
+        // 서버 재시작 등으로 토큰 무효화 → 재로그인
+        sessionStorage.removeItem(`token_${rId}`);
+        document.getElementById('login-password').value = '';
+        showView('login');
+        return;
+      }
       status.textContent = '⚠️ 연결 끊김 — 재연결 중…';
-      setTimeout(() => connect(wsUrl), 2000);
+      setTimeout(() => connectWS(rId, token), 2000);
     };
   }
 
-  async function init() {
-    if (!roomId) {
-      try {
-        const res = await fetch('/api/room', { method: 'POST' });
-        if (!res.ok) {
-          status.textContent = '❌ 방 생성 실패 — 페이지를 새로고침하세요';
-          return;
-        }
-        const data = await res.json();
-        roomId = data.room_id;
-        history.replaceState(null, '', `?room=${roomId}`);
-      } catch {
-        status.textContent = '❌ 서버 연결 실패';
-        return;
-      }
+  async function startPresenter(rId, token) {
+    try {
+      const res  = await fetch(`/api/room/${rId}`);
+      const data = await res.json();
+      document.getElementById('title').textContent = `🎓 ${data.title}`;
+    } catch {
+      document.getElementById('title').textContent = '🎓 강의 이모지 반응';
     }
 
-    const host       = window.location.host;
-    const proto      = location.protocol === 'https:' ? 'wss' : 'ws';
-    const studentUrl = `${location.protocol}//${host}/student.html?room=${roomId}`;
-    const wsUrl      = `${proto}://${host}/ws/presenter?room=${roomId}`;
+    document.getElementById('room-code').textContent = rId;
 
-    document.getElementById('room-code').textContent = roomId;
+    const host       = window.location.host;
+    const studentUrl = `${location.protocol}//${host}/student.html?room=${rId}`;
     document.getElementById('join-url').textContent = studentUrl;
 
-    new QRCode(document.getElementById('qrcode'), {
+    const qrEl = document.getElementById('qrcode');
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, {
       text: studentUrl,
       width: 200, height: 200,
       colorDark: '#000000', colorLight: '#ffffff',
     });
 
-    connect(wsUrl);
+    connectWS(rId, token);
+  }
+
+  // ── 초기화 ─────────────────────────────────────────────────────────────────
+  async function init() {
+    if (!roomId) {
+      showView('create');
+      return;
+    }
+
+    const stored = sessionStorage.getItem(`token_${roomId}`);
+    if (stored) {
+      showView('presenter');
+      startPresenter(roomId, stored);
+      return;
+    }
+
+    // 방 정보 조회 후 로그인 화면 표시
+    try {
+      const res = await fetch(`/api/room/${roomId}`);
+      if (!res.ok) {
+        // 방이 없으면 (서버 재시작 등) 개설 화면으로
+        const errEl = document.getElementById('create-error');
+        errEl.textContent = `방 코드 '${roomId}'를 찾을 수 없습니다. 새 방을 개설하세요.`;
+        errEl.style.display = 'block';
+        history.replaceState(null, '', location.pathname);
+        showView('create');
+        return;
+      }
+      const data = await res.json();
+      document.getElementById('login-room-title').textContent = `🔒 ${data.title}`;
+    } catch {
+      /* 네트워크 오류는 무시하고 로그인 화면 표시 */
+    }
+
+    document.getElementById('login-room-code').textContent = roomId;
+    showView('login');
   }
 
   init();

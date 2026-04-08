@@ -7,79 +7,19 @@ import string
 import hmac
 import hashlib
 import secrets
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Cookie, Form, Query
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, JSONResponse
+from dataclasses import dataclass, field
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 app = FastAPI()
 
-# ── 발표자 화면 암호 ──────────────────────────────────────────────────────────
-_PASSWORD    = os.environ.get("PRESENTER_PASSWORD", "")
-_SECRET      = secrets.token_hex(32)          # 서버 재시작마다 갱신
-_COOKIE_NAME = "presenter_token"
+_SECRET = secrets.token_hex(32)   # 서버 재시작마다 갱신 → 기존 토큰 자동 무효화
 
-def _make_token() -> str:
-    return hmac.new(_SECRET.encode(), _PASSWORD.encode(), hashlib.sha256).hexdigest()
 
-def _is_authorized(token: str | None) -> bool:
-    if not _PASSWORD:
-        return True
-    if not token:
-        return False
-    return hmac.compare_digest(token, _make_token())
-
-_LOGIN_HTML = """<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>강사 화면 로그인</title>
-  <style>
-    *, *::before, *::after {{ margin: 0; padding: 0; box-sizing: border-box; }}
-    body {{
-      background: #080812; color: #e2e8f0;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    }}
-    .card {{
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 24px; padding: 48px 40px; width: 100%; max-width: 360px;
-      display: flex; flex-direction: column; gap: 20px; text-align: center;
-    }}
-    h1 {{ font-size: 1.3rem; color: #a78bfa; }}
-    p  {{ font-size: 0.85rem; color: #64748b; }}
-    input[type=password] {{
-      width: 100%; background: rgba(255,255,255,0.05);
-      border: 2px solid rgba(255,255,255,0.09); border-radius: 12px;
-      padding: 12px 16px; color: #e2e8f0; font-size: 1rem; outline: none;
-      transition: border-color 0.15s;
-    }}
-    input[type=password]:focus {{ border-color: #a78bfa; }}
-    button {{
-      width: 100%; background: rgba(167,139,250,0.2);
-      border: 2px solid rgba(167,139,250,0.5); border-radius: 12px;
-      padding: 12px; color: #a78bfa; font-size: 1rem; cursor: pointer;
-      transition: background 0.15s;
-    }}
-    button:hover {{ background: rgba(167,139,250,0.35); }}
-    .error {{ color: #f87171; font-size: 0.85rem; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>🔒 강사 화면</h1>
-    <p>접근하려면 암호를 입력하세요.</p>
-    {error}
-    <form method="post" action="/login">
-      <input type="hidden" name="next" value="{next}"/>
-      <input type="password" name="password" placeholder="암호" autofocus/>
-      <br/><br/>
-      <button type="submit">입장</button>
-    </form>
-  </div>
-</body>
-</html>
-"""
+def _room_token(room_id: str, password: str) -> str:
+    return hmac.new(_SECRET.encode(), f"{room_id}:{password}".encode(), hashlib.sha256).hexdigest()
 
 
 def get_local_ip():
@@ -161,7 +101,14 @@ class ConnectionManager:
 
 
 # ── 방(Room) 관리 ─────────────────────────────────────────────────────────────
-rooms: dict[str, ConnectionManager] = {}
+@dataclass
+class Room:
+    title: str
+    password: str
+    manager: ConnectionManager = field(default_factory=ConnectionManager)
+
+
+rooms: dict[str, Room] = {}
 
 
 def generate_room_id() -> str:
@@ -172,23 +119,61 @@ def generate_room_id() -> str:
             return rid
 
 
+class CreateRoomBody(BaseModel):
+    title: str
+    password: str
+
+
+class LoginRoomBody(BaseModel):
+    password: str
+
+
 @app.post("/api/room")
-async def create_room(presenter_token: str | None = Cookie(default=None)):
-    if not _is_authorized(presenter_token):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+async def create_room(body: CreateRoomBody):
+    title = body.title.strip()[:50]
+    if not title or not body.password:
+        return JSONResponse({"error": "title and password required"}, status_code=400)
     room_id = generate_room_id()
-    rooms[room_id] = ConnectionManager()
-    return {"room_id": room_id}
+    rooms[room_id] = Room(title=title, password=body.password)
+    token = _room_token(room_id, body.password)
+    return {"room_id": room_id, "token": token}
+
+
+@app.post("/api/room/{room_id}/login")
+async def login_room(room_id: str, body: LoginRoomBody):
+    room_id = room_id.upper().strip()[:6]
+    r = rooms.get(room_id)
+    if not r:
+        return JSONResponse({"error": "room not found"}, status_code=404)
+    if not hmac.compare_digest(body.password, r.password):
+        return JSONResponse({"error": "wrong password"}, status_code=401)
+    token = _room_token(room_id, body.password)
+    return {"token": token}
+
+
+@app.get("/api/room/{room_id}")
+async def get_room_info(room_id: str):
+    room_id = room_id.upper().strip()[:6]
+    r = rooms.get(room_id)
+    if not r:
+        return JSONResponse({"error": "room not found"}, status_code=404)
+    return {"title": r.title}
 
 
 @app.websocket("/ws/presenter")
-async def presenter_ws(ws: WebSocket, room: str = Query(default="")):
+async def presenter_ws(ws: WebSocket, room: str = Query(default=""), token: str = Query(default="")):
     room = room.upper().strip()[:6]
     if not room or room not in rooms:
         await ws.accept()
         await ws.close(code=4004)
         return
-    mgr = rooms[room]
+    r = rooms[room]
+    expected = _room_token(room, r.password)
+    if not token or not hmac.compare_digest(token, expected):
+        await ws.accept()
+        await ws.close(code=4001)
+        return
+    mgr = r.manager
     await mgr.connect_presenter(ws)
     try:
         while True:
@@ -213,7 +198,7 @@ async def student_ws(ws: WebSocket, room: str = Query(default="")):
         await ws.accept()
         await ws.close(code=4004)
         return
-    mgr = rooms[room]
+    mgr = rooms[room].manager
     await mgr.connect_student(ws)
     try:
         while True:
@@ -233,26 +218,8 @@ async def student_ws(ws: WebSocket, room: str = Query(default="")):
 
 
 @app.get("/presenter.html")
-async def presenter_page(presenter_token: str | None = Cookie(default=None)):
-    if not _is_authorized(presenter_token):
-        return RedirectResponse("/login?next=/presenter.html")
+async def presenter_page():
     return FileResponse("static/presenter.html")
-
-
-@app.get("/login")
-async def login_page(next: str = "/presenter.html", error: str = ""):
-    error_html = '<p class="error">암호가 틀렸습니다.</p>' if error else ""
-    return HTMLResponse(_LOGIN_HTML.format(next=next, error=error_html))
-
-
-@app.post("/login")
-async def do_login(password: str = Form(...), next: str = Form(default="/presenter.html")):
-    next_url = next if next.startswith("/") else "/presenter.html"
-    if _PASSWORD and password == _PASSWORD:
-        response = RedirectResponse(next_url, status_code=303)
-        response.set_cookie(_COOKIE_NAME, _make_token(), httponly=True, samesite="strict")
-        return response
-    return RedirectResponse(f"/login?next={next_url}&error=1", status_code=303)
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
@@ -272,9 +239,5 @@ if __name__ == "__main__":
         print(f"  강사 화면  →  http://{ip}:{port}/presenter.html")
         print(f"  학생 접속  →  http://{ip}:{port}/student.html")
         print(f"  (학생들과 같은 Wi-Fi 네트워크여야 합니다)")
-    if _PASSWORD:
-        print(f"  발표자 암호 설정됨 (PRESENTER_PASSWORD)")
-    else:
-        print(f"  ⚠️  발표자 암호 미설정 — PRESENTER_PASSWORD 환경변수로 설정하세요")
     print(f"{'=' * 52}\n")
     uvicorn.run(app, host="0.0.0.0", port=port)
