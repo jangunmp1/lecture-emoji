@@ -11,6 +11,12 @@
 
 import sys
 import os
+
+# PyInstaller 번들에서 시스템 GIO 모듈 로드 시 발생하는 버전 불일치 경고 억제 (Linux)
+if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
+    os.environ.setdefault('GIO_MODULE_DIR', '')
+    os.environ.setdefault('GIO_EXTRA_MODULES', '')
+
 import asyncio
 import json
 import random
@@ -31,10 +37,10 @@ import websockets
 
 # ── 접속 정보 입력 다이얼로그 ─────────────────────────────────────────────────
 class _ConnectDialog(QDialog):
-    def __init__(self, room: str = "", password: str = "", parent=None):
+    def __init__(self, host: str = "localhost:8000", room: str = "", password: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("강의 이모지 오버레이")
-        self.setMinimumWidth(340)
+        self.setMinimumWidth(360)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
@@ -52,6 +58,11 @@ class _ConnectDialog(QDialog):
         form = QFormLayout()
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._host_input = QLineEdit()
+        self._host_input.setPlaceholderText("예: localhost:8000 또는 192.168.1.5:8000")
+        self._host_input.setText(host)
+        form.addRow("서버 주소:", self._host_input)
 
         self._room_input = QLineEdit()
         self._room_input.setPlaceholderText("예: ABC123")
@@ -80,7 +91,7 @@ class _ConnectDialog(QDialog):
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
 
-        (self._pw_input if room else self._room_input).setFocus()
+        (self._room_input if not room else (self._pw_input if not password else self._pw_input)).setFocus()
 
     def _force_upper(self, text: str):
         upper = text.upper()
@@ -89,8 +100,8 @@ class _ConnectDialog(QDialog):
             self._room_input.setText(upper)
             self._room_input.setCursorPosition(pos)
 
-    def get_values(self) -> tuple[str, str]:
-        return self._room_input.text().strip(), self._pw_input.text()
+    def get_values(self) -> tuple[str, str, str]:
+        return self._host_input.text().strip(), self._room_input.text().strip(), self._pw_input.text()
 
 
 # ── Qt 시그널 브릿지 (asyncio 스레드 → Qt 메인 스레드) ──────────────────────
@@ -339,19 +350,21 @@ def main():
     # ── 접속 정보 결정 ──────────────────────────────────────────────────────────
     room_code = args.room.strip().upper()
     password  = args.password
+    port_part = f":{args.port}" if args.port else ("" if args.ssl else ":8000")
+    default_host = f"{args.host}{port_part}"
 
     if not room_code or not password:
-        dlg = _ConnectDialog(room=room_code, password=password)
+        dlg = _ConnectDialog(host=default_host, room=room_code, password=password)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             sys.exit(0)
-        room_code, password = dlg.get_values()
-        if not room_code or not password:
-            QMessageBox.warning(None, "입력 오류", "방 코드와 비밀번호를 모두 입력하세요.")
+        host_base, room_code, password = dlg.get_values()
+        if not host_base or not room_code or not password:
+            QMessageBox.warning(None, "입력 오류", "서버 주소, 방 코드, 비밀번호를 모두 입력하세요.")
             sys.exit(0)
+    else:
+        host_base = default_host
 
     # ── URL 구성 ────────────────────────────────────────────────────────────────
-    port_part   = f":{args.port}" if args.port else ("" if args.ssl else ":8000")
-    host_base   = f"{args.host}{port_part}"
     http_scheme = "https" if args.ssl else "http"
     ws_scheme   = "wss"   if args.ssl else "ws"
 
