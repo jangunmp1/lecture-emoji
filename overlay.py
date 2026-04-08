@@ -17,6 +17,12 @@ if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
     os.environ.setdefault('GIO_MODULE_DIR', '')
     os.environ.setdefault('GIO_EXTRA_MODULES', '')
 
+# PyInstaller 번들에서 macOS 시스템 인증서 대신 certifi 인증서 사용
+if getattr(sys, 'frozen', False) and sys.platform == 'darwin':
+    import certifi
+    os.environ['SSL_CERT_FILE'] = certifi.where()
+    os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
+
 import asyncio
 import json
 import random
