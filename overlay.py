@@ -185,8 +185,8 @@ class EmojiOverlay(QWidget):
         self._bubbles[bubble_id] = label
 
     def show_room_code(self, room_code: str):
-        label = QLabel(f"방 코드  {room_code}", self)
-        font = QFont("monospace", 12)
+        label = QLabel(room_code, self)
+        font = QFont("monospace", 24)
         font.setBold(True)
         label.setFont(font)
         label.setStyleSheet("""
