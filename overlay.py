@@ -30,12 +30,15 @@ import threading
 import argparse
 import urllib.request
 import urllib.error
+import time
+from collections import deque
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QSystemTrayIcon, QMenu,
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox, QCheckBox,
+    QGraphicsOpacityEffect,
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QParallelAnimationGroup, QPoint, QEasingCurve, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QColor, QPainter, QIcon
 
 import websockets
@@ -145,12 +148,26 @@ class EmojiOverlay(QWidget):
         self._bubbles: dict[str, QLabel] = {}
         self._room_label: QLabel | None = None
         self._qr_label: QLabel | None = None
+        self._emoji_timestamps: dict[str, deque] = {}
 
         bridge.emoji_received.connect(self._spawn)
         bridge.question_received.connect(self._spawn_bubble)
         bridge.bubble_deleted.connect(self._delete_bubble)
 
+    _BURST_COUNT  = 5    # 같은 이모지가 N개 이상 → 왕이모지
+    _BURST_WINDOW = 2.0  # 감지 시간 창 (초)
+
     def _spawn(self, emoji: str):
+        # 버스트 감지
+        now = time.monotonic()
+        q = self._emoji_timestamps.setdefault(emoji, deque())
+        q.append(now)
+        while q[0] < now - self._BURST_WINDOW:
+            q.popleft()
+        if len(q) >= self._BURST_COUNT:
+            q.clear()
+            self._spawn_big(emoji)
+
         label = QLabel(emoji, self)
         font = QFont()
         font.setPointSize(52)
@@ -174,6 +191,43 @@ class EmojiOverlay(QWidget):
         anim.finished.connect(label.deleteLater)
         anim.start()
         label._anim = anim  # GC 방지
+
+    def _spawn_big(self, emoji: str):
+        label = QLabel(emoji, self)
+        font = QFont()
+        font.setPointSize(180)
+        label.setFont(font)
+        label.setStyleSheet("background: transparent;")
+        label.adjustSize()
+
+        x = (self.width()  - label.width())  // 2
+        y = (self.height() - label.height()) // 2
+        label.move(x, y)
+        label.show()
+        label.raise_()
+
+        effect = QGraphicsOpacityEffect(label)
+        label.setGraphicsEffect(effect)
+
+        anim_pos = QPropertyAnimation(label, b"pos")
+        anim_pos.setDuration(2500)
+        anim_pos.setStartValue(QPoint(x, y))
+        anim_pos.setEndValue(QPoint(x, y - 200))
+        anim_pos.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        anim_fade = QPropertyAnimation(effect, b"opacity")
+        anim_fade.setDuration(2500)
+        anim_fade.setStartValue(1.0)
+        anim_fade.setEndValue(0.0)
+        anim_fade.setEasingCurve(QEasingCurve.Type.InQuad)
+
+        group = QParallelAnimationGroup(label)
+        group.addAnimation(anim_pos)
+        group.addAnimation(anim_fade)
+        group.finished.connect(label.deleteLater)
+        group.start()
+        label._group = group   # GC 방지
+        label._effect = effect
 
     def _spawn_bubble(self, text: str, bubble_id: str):
         MARGIN_RIGHT  = 32
