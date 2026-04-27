@@ -36,7 +36,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox, QCheckBox,
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve, pyqtSignal, QObject
-from PyQt6.QtGui import QFont, QPixmap, QColor, QPainter, QIcon
+from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QColor, QPainter, QIcon
 
 import websockets
 
@@ -171,7 +171,6 @@ class EmojiOverlay(QWidget):
         anim.setEasingCurve(QEasingCurve.Type.OutQuad)
         anim.finished.connect(label.deleteLater)
         anim.start()
-
         label._anim = anim  # GC 방지
 
     def _spawn_bubble(self, text: str, bubble_id: str):
@@ -356,6 +355,15 @@ def main():
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    # Linux: 시스템 폰트(COLRv1)를 Qt가 렌더링 못 하므로 CBDT 포맷 폰트를 직접 로드
+    if sys.platform.startswith("linux"):
+        _base = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        _font_path = os.path.join(_base, "assets", "NotoColorEmoji.ttf")
+        if os.path.exists(_font_path):
+            QFontDatabase.addApplicationFont(_font_path)
+        else:
+            print(f"⚠️  번들 폰트 없음: {_font_path}")
 
     # ── 접속 정보 결정 ──────────────────────────────────────────────────────────
     room_code = args.room.strip().upper()

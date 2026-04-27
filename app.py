@@ -112,7 +112,7 @@ rooms: dict[str, Room] = {}
 
 
 def generate_room_id() -> str:
-    chars = string.ascii_uppercase + string.digits
+    chars = ''.join(c for c in string.ascii_uppercase + string.digits if c not in 'O0I1')
     while True:
         rid = ''.join(random.choices(chars, k=6))
         if rid not in rooms:
