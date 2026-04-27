@@ -143,6 +143,8 @@ class EmojiOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self._bubbles: dict[str, QLabel] = {}
+        self._room_label: QLabel | None = None
+        self._qr_label: QLabel | None = None
 
         bridge.emoji_received.connect(self._spawn)
         bridge.question_received.connect(self._spawn_bubble)
@@ -204,6 +206,48 @@ class EmojiOverlay(QWidget):
         label.raise_()
         self._bubbles[bubble_id] = label
 
+    def show_qr(self, url: str):
+        import qrcode as _qr
+        qr = _qr.QRCode(border=2)
+        qr.add_data(url)
+        qr.make(fit=True)
+        matrix = qr.get_matrix()
+
+        cell = 6
+        n = len(matrix)
+        pm = QPixmap(n * cell, n * cell)
+        pm.fill(QColor(255, 255, 255, 230))
+        p = QPainter(pm)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0))
+        for y, row in enumerate(matrix):
+            for x, dark in enumerate(row):
+                if dark:
+                    p.drawRect(x * cell, y * cell, cell, cell)
+        p.end()
+
+        self._qr_label = QLabel(self)
+        self._qr_label.setPixmap(pm)
+        ref = self._room_label
+        if ref:
+            x = ref.x() + ref.width() - pm.width()
+            y = ref.y() + ref.height() + 8
+        else:
+            x = self.width() - pm.width() - 20
+            y = 20
+        self._qr_label.move(x, y)
+        self._qr_label.show()
+        self._qr_label.raise_()
+
+    def toggle_qr(self) -> bool:
+        if not self._qr_label:
+            return False
+        visible = not self._qr_label.isVisible()
+        self._qr_label.setVisible(visible)
+        if visible:
+            self._qr_label.raise_()
+        return visible
+
     def show_room_code(self, room_code: str):
         label = QLabel(room_code, self)
         font = QFont("monospace", 24)
@@ -222,6 +266,7 @@ class EmojiOverlay(QWidget):
         label.move(x, 52)
         label.show()
         label.raise_()
+        self._room_label = label
 
     def _delete_bubble(self, bubble_id: str):
         label = self._bubbles.pop(bubble_id, None)
@@ -413,9 +458,12 @@ def main():
 
     ws_url = f"{ws_scheme}://{host_base}/ws/presenter?room={room_code}&token={token}"
 
+    student_url = f"{http_scheme}://{host_base}/student.html?room={room_code}"
+
     overlay = EmojiOverlay()
     overlay.show()
     overlay.show_room_code(room_code)
+    overlay.show_qr(student_url)
 
     if sys.platform == "darwin":
         _setup_macos(overlay)
@@ -432,6 +480,12 @@ def main():
 
     tray = QSystemTrayIcon(QIcon(icon_pixmap), app)
     menu = QMenu()
+    qr_action = menu.addAction("QR 코드 숨기기")
+    def _toggle_qr():
+        visible = overlay.toggle_qr()
+        qr_action.setText("QR 코드 숨기기" if visible else "QR 코드 표시")
+    qr_action.triggered.connect(_toggle_qr)
+    menu.addSeparator()
     menu.addAction("종료").triggered.connect(app.quit)
     tray.setContextMenu(menu)
     tray.setToolTip("강의 이모지 오버레이")

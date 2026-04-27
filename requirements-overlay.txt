@@ -1,5 +1,6 @@
 PyQt6
 websockets
 certifi
+qrcode
 pyobjc-framework-Cocoa; sys_platform == "darwin"
 python-xlib; sys_platform == "linux"
