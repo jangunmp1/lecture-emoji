@@ -403,14 +403,27 @@ async def list_rooms(authorization: str = Header(default="")):
         # 로그인하지 않은 경우 (공개 목록 또는 빈 목록)
         return []
     
-    # 로그인한 강사 본인이 개설한 방만 반환
+    # 로그인한 강사 본인이 개설한 방만 반환 (질문 개수 포함)
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT room_id, title, created_at FROM rooms WHERE presenter_id = ? ORDER BY created_at DESC",
+            """
+            SELECT r.room_id, r.title, r.created_at,
+                   (SELECT COUNT(*) FROM questions q WHERE q.room_id = r.room_id) as question_count
+            FROM rooms r
+            WHERE r.presenter_id = ?
+            ORDER BY r.created_at DESC
+            """,
             (presenter["id"],)
         )
-        return [{"room_id": row["room_id"], "title": row["title"]} for row in cursor.fetchall()]
+        return [
+            {
+                "room_id": row["room_id"],
+                "title": row["title"],
+                "question_count": row["question_count"]
+            }
+            for row in cursor.fetchall()
+        ]
 
 
 @app.get("/api/room/{room_id}")
@@ -420,6 +433,54 @@ async def get_room_info(room_id: str):
     if not r:
         return JSONResponse({"error": "room not found"}, status_code=404)
     return {"title": r.title}
+
+
+@app.get("/api/room/{room_id}/questions")
+async def get_room_questions(room_id: str, authorization: str = Header(default="")):
+    room_id = room_id.upper().strip()[:6]
+    presenter = get_current_presenter(authorization)
+    token = authorization.removeprefix("Bearer ").strip()
+
+    r = rooms.get(room_id)
+    is_owner = False
+    is_token_valid = False
+
+    if r:
+        if presenter and presenter["id"] == r.presenter_id:
+            is_owner = True
+        elif token and hmac.compare_digest(token, _room_token(room_id, r.password)):
+            is_token_valid = True
+
+    if not is_owner and not is_token_valid:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT presenter_id, password FROM rooms WHERE room_id = ?", (room_id,))
+            row = cursor.fetchone()
+            if not row:
+                return JSONResponse({"error": "room not found"}, status_code=404)
+            if presenter and presenter["id"] == row["presenter_id"]:
+                is_owner = True
+            elif token and hmac.compare_digest(token, _room_token(room_id, row["password"])):
+                is_token_valid = True
+
+    if not is_owner and not is_token_valid:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, text, is_deleted, strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at FROM questions WHERE room_id = ? ORDER BY created_at ASC",
+            (room_id,)
+        )
+        return [
+            {
+                "id": row["id"],
+                "text": row["text"],
+                "is_deleted": bool(row["is_deleted"]),
+                "created_at": row["created_at"]
+            }
+            for row in cursor.fetchall()
+        ]
 
 
 @app.delete("/api/room/{room_id}")
