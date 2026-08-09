@@ -436,51 +436,109 @@ async def get_room_info(room_id: str):
 
 
 @app.get("/api/room/{room_id}/questions")
-async def get_room_questions(room_id: str, authorization: str = Header(default="")):
+async def get_room_questions(
+    room_id: str,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    filter_type: str = Query(default="all"),
+    search: str = Query(default=""),
+    authorization: str = Header(default="")
+):
     room_id = room_id.upper().strip()[:6]
     presenter = get_current_presenter(authorization)
     token = authorization.removeprefix("Bearer ").strip()
 
-    r = rooms.get(room_id)
     is_owner = False
     is_token_valid = False
-
-    if r:
-        if presenter and presenter["id"] == r.presenter_id:
-            is_owner = True
-        elif token and hmac.compare_digest(token, _room_token(room_id, r.password)):
-            is_token_valid = True
-
-    if not is_owner and not is_token_valid:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT presenter_id, password FROM rooms WHERE room_id = ?", (room_id,))
-            row = cursor.fetchone()
-            if not row:
-                return JSONResponse({"error": "room not found"}, status_code=404)
-            if presenter and presenter["id"] == row["presenter_id"]:
-                is_owner = True
-            elif token and hmac.compare_digest(token, _room_token(room_id, row["password"])):
-                is_token_valid = True
-
-    if not is_owner and not is_token_valid:
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    room_title = ""
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, text, is_deleted, strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at FROM questions WHERE room_id = ? ORDER BY created_at ASC",
-            (room_id,)
-        )
-        return [
+        cursor.execute("SELECT presenter_id, title, password FROM rooms WHERE room_id = ?", (room_id,))
+        row = cursor.fetchone()
+        if not row:
+            return JSONResponse({"error": "room not found"}, status_code=404)
+        
+        room_title = row["title"]
+        if presenter and presenter["id"] == row["presenter_id"]:
+            is_owner = True
+        elif token and hmac.compare_digest(token, _room_token(room_id, row["password"])):
+            is_token_valid = True
+
+        if not is_owner and not is_token_valid:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+        # 전체 통계 계산
+        cursor.execute("SELECT COUNT(*) FROM questions WHERE room_id = ?", (room_id,))
+        total_all = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM questions WHERE room_id = ? AND is_deleted = 0", (room_id,))
+        total_active = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM questions WHERE room_id = ? AND is_deleted = 1", (room_id,))
+        total_deleted = cursor.fetchone()[0]
+
+        # 필터 및 검색 조건 적용
+        where_clauses = ["room_id = ?"]
+        params = [room_id]
+
+        if filter_type == "active":
+            where_clauses.append("is_deleted = 0")
+        elif filter_type == "deleted":
+            where_clauses.append("is_deleted = 1")
+
+        if search.strip():
+            where_clauses.append("text LIKE ?")
+            params.append(f"%{search.strip()}%")
+
+        where_sql = " WHERE " + " AND ".join(where_clauses)
+
+        # 필터링된 총 개수 계산
+        cursor.execute(f"SELECT COUNT(*) FROM questions {where_sql}", params)
+        filtered_count = cursor.fetchone()[0]
+
+        total_pages = (filtered_count + limit - 1) // limit if filtered_count > 0 else 1
+        page = min(page, total_pages)
+        offset = (page - 1) * limit
+
+        query_sql = f"""
+            SELECT id, text, is_deleted, strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at
+            FROM questions
+            {where_sql}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        cursor.execute(query_sql, params + [limit, offset])
+
+        questions = [
             {
-                "id": row["id"],
-                "text": row["text"],
-                "is_deleted": bool(row["is_deleted"]),
-                "created_at": row["created_at"]
+                "id": r["id"],
+                "text": r["text"],
+                "is_deleted": bool(r["is_deleted"]),
+                "created_at": r["created_at"]
             }
-            for row in cursor.fetchall()
+            for r in cursor.fetchall()
         ]
+
+        return {
+            "room_id": room_id,
+            "room_title": room_title,
+            "page": page,
+            "limit": limit,
+            "total_count": filtered_count,
+            "total_pages": total_pages,
+            "stats": {
+                "total": total_all,
+                "active": total_active,
+                "deleted": total_deleted
+            },
+            "questions": questions
+        }
+
+
+@app.get("/history.html")
+async def history_page():
+    return FileResponse("static/history.html")
 
 
 @app.delete("/api/room/{room_id}")

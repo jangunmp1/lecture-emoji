@@ -950,7 +950,7 @@
         historyBtn.textContent = '📋 질문 내역';
         historyBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          openQuestionHistoryModal(room.room_id, room.title);
+          location.href = `/history.html?room=${room.room_id}`;
         });
 
         actionsDiv.appendChild(historyBtn);
@@ -1111,8 +1111,7 @@
   });
 
   document.getElementById('view-history-btn').addEventListener('click', () => {
-    const title = document.getElementById('title').textContent.replace(/^🎓\s*/, '');
-    openQuestionHistoryModal(roomId, title);
+    window.open(`/history.html?room=${roomId}`, '_blank');
   });
 
   document.getElementById('delete-room-btn').addEventListener('click', async () => {

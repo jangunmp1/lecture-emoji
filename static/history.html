@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>질문 내역 기록 — 강의 이모지 반응</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #080812;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+
+    #back-btn, #export-btn {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 8px 14px;
+      border-radius: 10px;
+      transition: background 0.15s, color 0.15s;
+    }
+    #back-btn:hover { background: rgba(255,255,255,0.08); }
+    #export-btn { background: rgba(167,139,250,0.12); color: #a78bfa; border-color: rgba(167,139,250,0.3); }
+    #export-btn:hover { background: rgba(167,139,250,0.25); color: #fff; }
+
+    #header-title-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #a78bfa;
+    }
+
+    #room-badge {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+    #room-badge span {
+      font-family: monospace;
+      font-weight: 700;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Main Container ── */
+    #container {
+      flex: 1;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Summary Stats ── */
+    .stats-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 14px 20px;
+      text-align: center;
+      flex: 1;
+      max-width: 200px;
+    }
+
+    .stat-card .label {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+
+    .stat-card .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+
+    .stat-card.active .value { color: #4ade80; }
+    .stat-card.deleted .value { color: #94a3b8; }
+
+    /* ── Controls Toolbar ── */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 14px 18px;
+    }
+
+    .filter-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #94a3b8;
+      font-size: 0.83rem;
+      font-family: inherit;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .filter-btn:hover { color: #e2e8f0; }
+
+    .filter-btn.active {
+      background: rgba(167,139,250,0.18);
+      border-color: rgba(167,139,250,0.4);
+      color: #c4b5fd;
+      font-weight: 600;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      max-width: 280px;
+    }
+
+    .search-box input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 7px 12px;
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      outline: none;
+    }
+    .search-box input:focus { border-color: #a78bfa; }
+
+    .limit-select {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* ── Questions List ── */
+    .questions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .q-item {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+
+    .q-item:hover { background: rgba(255,255,255,0.06); }
+
+    .q-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .q-item-text {
+      font-size: 1.02rem;
+      color: #e2e8f0;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .badge-active {
+      color: #4ade80;
+      background: rgba(74, 222, 128, 0.12);
+      border: 1px solid rgba(74, 222, 128, 0.25);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+
+    .badge-deleted {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.12);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+
+    #no-data-msg {
+      text-align: center;
+      color: #475569;
+      font-size: 0.95rem;
+      padding: 40px 0;
+      display: none;
+    }
+
+    /* ── Pagination Bar ── */
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      margin-top: auto;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .page-status {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    .page-nav {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .page-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .page-btn:hover:not(:disabled) {
+      background: rgba(167,139,250,0.18);
+      border-color: rgba(167,139,250,0.35);
+    }
+
+    .page-btn.active {
+      background: rgba(167,139,250,0.25);
+      border-color: rgba(167,139,250,0.5);
+      color: #a78bfa;
+      font-weight: 700;
+    }
+
+    .page-btn:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <div id="header">
+    <button id="back-btn">← 강의 목록으로</button>
+    <div id="header-title-container">
+      <div id="title">🎓 질문 내역 기록</div>
+      <div id="room-badge">방 코드: <span id="room-code">…</span></div>
+    </div>
+    <button id="export-btn">📋 전체 내역 복사</button>
+  </div>
+
+  <!-- ── Main Container ── -->
+  <div id="container">
+
+    <!-- ── Summary Stats ── -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">전체 질문</div>
+        <div class="value" id="stat-total">0</div>
+      </div>
+      <div class="stat-card active">
+        <div class="label">🟢 활성 질문</div>
+        <div class="value" id="stat-active">0</div>
+      </div>
+      <div class="stat-card deleted">
+        <div class="label">⚪ 답변완료 / 삭제</div>
+        <div class="value" id="stat-deleted">0</div>
+      </div>
+    </div>
+
+    <!-- ── Toolbar ── -->
+    <div class="toolbar">
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">전체 보기</button>
+        <button class="filter-btn" data-filter="active">🟢 활성만</button>
+        <button class="filter-btn" data-filter="deleted">⚪ 답변완료만</button>
+      </div>
+
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="🔍 질문 내용 검색..." />
+      </div>
+
+      <div>
+        <select id="limit-select" class="limit-select">
+          <option value="10">10개씩 보기</option>
+          <option value="20" selected>20개씩 보기</option>
+          <option value="50">50개씩 보기</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── Questions List ── -->
+    <div id="questions-list" class="questions-list"></div>
+    <div id="no-data-msg">검색된 질문 내역이 없습니다.</div>
+
+    <!-- ── Pagination Bar ── -->
+    <div class="pagination-bar">
+      <div class="page-status" id="page-status">0개 중 0~0개 표시</div>
+      <div class="page-nav" id="page-nav"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const params    = new URLSearchParams(location.search);
+    const roomId    = params.get('room') ? params.get('room').toUpperCase() : null;
+
+    let currentPage = 1;
+    let currentLimit = 20;
+    let currentFilter = 'all';
+    let currentSearch = '';
+    let fetchedQuestions = [];
+
+    function getAuthToken() { return localStorage.getItem('presenter_auth_token'); }
+
+    document.getElementById('back-btn').addEventListener('click', () => {
+      location.href = `/presenter.html${roomId ? '?room=' + roomId : ''}`;
+    });
+
+    if (!roomId) {
+      alert('잘못된 접근입니다. 방 코드가 필요합니다.');
+      location.href = '/presenter.html';
+    }
+
+    document.getElementById('room-code').textContent = roomId;
+
+    // ── 필터 버튼 세팅 ────────────────────────────────────────────────────────
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        currentPage = 1;
+        loadQuestions();
+      });
+    });
+
+    // ── 검색 디바운스 ─────────────────────────────────────────────────────────
+    let searchTimeout;
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        currentSearch = e.target.value;
+        currentPage = 1;
+        loadQuestions();
+      }, 300);
+    });
+
+    // ── Limit 수 변경 ─────────────────────────────────────────────────────────
+    document.getElementById('limit-select').addEventListener('change', (e) => {
+      currentLimit = parseInt(e.target.value, 10);
+      currentPage = 1;
+      loadQuestions();
+    });
+
+    // ── 질문 조회 API ─────────────────────────────────────────────────────────
+    async function loadQuestions() {
+      const listEl   = document.getElementById('questions-list');
+      const noDataEl = document.getElementById('no-data-msg');
+      const pageNav  = document.getElementById('page-nav');
+      listEl.innerHTML = '';
+      pageNav.innerHTML = '';
+      noDataEl.style.display = 'none';
+
+      const authToken = getAuthToken();
+      const roomToken = sessionStorage.getItem(`token_${roomId}`);
+      const headers   = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      else if (roomToken) headers['Authorization'] = `Bearer ${roomToken}`;
+
+      const queryUrl = `/api/room/${roomId}/questions?page=${currentPage}&limit=${currentLimit}&filter_type=${currentFilter}&search=${encodeURIComponent(currentSearch)}`;
+
+      try {
+        const res = await fetch(queryUrl, { headers });
+        if (res.status === 401) {
+          alert('접속 권한이 없습니다. 강사 로그인이 필요합니다.');
+          location.href = '/presenter.html';
+          return;
+        }
+        if (!res.ok) throw new Error('데이터를 불러올 수 없습니다.');
+
+        const data = await res.json();
+        document.getElementById('title').textContent = `🎓 ${data.room_title || '질문 내역 기록'}`;
+        document.getElementById('stat-total').textContent  = data.stats.total;
+        document.getElementById('stat-active').textContent = data.stats.active;
+        document.getElementById('stat-deleted').textContent = data.stats.deleted;
+
+        fetchedQuestions = data.questions;
+
+        if (!data.questions.length) {
+          noDataEl.style.display = 'block';
+          document.getElementById('page-status').textContent = '질문 없음';
+          return;
+        }
+
+        const startIdx = (data.page - 1) * data.limit + 1;
+        const endIdx   = Math.min(data.page * data.limit, data.total_count);
+        document.getElementById('page-status').textContent = `${data.total_count}개 중 ${startIdx}~${endIdx}개 표시 (총 ${data.total_pages}페이지)`;
+
+        data.questions.forEach((q, idx) => {
+          const item = document.createElement('div');
+          item.className = 'q-item';
+
+          const header = document.createElement('div');
+          header.className = 'q-item-header';
+
+          const numSpan = document.createElement('span');
+          numSpan.textContent = `#${data.total_count - (startIdx - 1 + idx)} • 작성시각: ${q.created_at || '알 수 없음'}`;
+
+          const statusSpan = document.createElement('span');
+          if (q.is_deleted) {
+            statusSpan.className = 'badge-deleted';
+            statusSpan.textContent = '⚪ 답변완료 / 삭제됨';
+          } else {
+            statusSpan.className = 'badge-active';
+            statusSpan.textContent = '🟢 활성 질문';
+          }
+
+          header.appendChild(numSpan);
+          header.appendChild(statusSpan);
+
+          const textDiv = document.createElement('div');
+          textDiv.className = 'q-item-text';
+          textDiv.textContent = q.text;
+
+          item.appendChild(header);
+          item.appendChild(textDiv);
+          listEl.appendChild(item);
+        });
+
+        // ── 페이지네이션 버튼 렌더링 ───────────────────────────────────────────
+        renderPagination(data.page, data.total_pages);
+
+      } catch (e) {
+        noDataEl.textContent = e.message;
+        noDataEl.style.display = 'block';
+      }
+    }
+
+    function renderPagination(page, totalPages) {
+      const pageNav = document.getElementById('page-nav');
+      pageNav.innerHTML = '';
+
+      // 이전 버튼
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'page-btn';
+      prevBtn.textContent = '◀ 이전';
+      prevBtn.disabled = page <= 1;
+      prevBtn.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage--;
+          loadQuestions();
+        }
+      });
+      pageNav.appendChild(prevBtn);
+
+      // 페이지 번호 버튼 (최대 5개 표시)
+      let startPage = Math.max(1, page - 2);
+      let endPage   = Math.min(totalPages, startPage + 4);
+      if (endPage - startPage < 4) {
+        startPage = Math.max(1, endPage - 4);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.className = `page-btn ${i === page ? 'active' : ''}`;
+        btn.textContent = i;
+        btn.addEventListener('click', () => {
+          currentPage = i;
+          loadQuestions();
+        });
+        pageNav.appendChild(btn);
+      }
+
+      // 다음 버튼
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'page-btn';
+      nextBtn.textContent = '다음 ▶';
+      nextBtn.disabled = page >= totalPages;
+      nextBtn.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+          currentPage++;
+          loadQuestions();
+        }
+      });
+      pageNav.appendChild(nextBtn);
+    }
+
+    // ── 전체 내역 복사 ────────────────────────────────────────────────────────
+    document.getElementById('export-btn').addEventListener('click', async () => {
+      const authToken = getAuthToken();
+      const roomToken = sessionStorage.getItem(`token_${roomId}`);
+      const headers   = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      else if (roomToken) headers['Authorization'] = `Bearer ${roomToken}`;
+
+      try {
+        const res = await fetch(`/api/room/${roomId}/questions?page=1&limit=1000&filter_type=all`, { headers });
+        const data = await res.json();
+        if (!data.questions || !data.questions.length) {
+          alert('복사할 질문 내역이 없습니다.');
+          return;
+        }
+
+        const lines = data.questions.map((q, i) => 
+          `[${i + 1}] (${q.created_at || ''}) ${q.text} ${q.is_deleted ? '[답변완료/삭제됨]' : ''}`
+        ).join('\n');
+
+        await navigator.clipboard.writeText(lines);
+        alert('모든 질문 내역이 클립보드에 복사되었습니다!');
+      } catch {
+        alert('복사에 실패했습니다.');
+      }
+    });
+
+    loadQuestions();
+  </script>
+</body>
+</html>
