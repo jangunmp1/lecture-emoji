@@ -647,15 +647,32 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     is_cloud = "PORT" in os.environ
 
+    ssl_cert = os.environ.get("SSL_CERTFILE", "/etc/gitlab/ssl/dmlab.kookmin.ac.kr.crt")
+    ssl_key  = os.environ.get("SSL_KEYFILE", "/etc/gitlab/ssl/dmlab.kookmin.ac.kr.key")
+    use_ssl  = os.path.exists(ssl_cert) and os.path.exists(ssl_key) and os.environ.get("USE_SSL", "true").lower() != "false"
+
+    scheme = "https" if use_ssl else "http"
+
     print(f"\n{'=' * 52}")
-    print(f"  강의 이모지 반응 서버 시작! (DB & 회원가입 기능 적용)")
+    print(f"  강의 이모지 반응 서버 시작! ({'HTTPS/SSL 적용됨' if use_ssl else 'HTTP 모드'})")
     print(f"{'=' * 52}")
     if is_cloud:
-        print(f"  클라우드 모드 (PORT={port})")
+        print(f"  클라우드 모드 (PORT={port}, SSL={'켜짐' if use_ssl else '꺼짐'})")
     else:
         ip = get_local_ip()
-        print(f"  강사 화면  →  http://{ip}:{port}/presenter.html")
-        print(f"  학생 접속  →  http://{ip}:{port}/student.html")
+        print(f"  강사 화면  →  {scheme}://{ip}:{port}/presenter.html")
+        print(f"  학생 접속  →  {scheme}://{ip}:{port}/student.html")
+        print(f"  도메인 접속 →  {scheme}://dmlab.kookmin.ac.kr:{port}/presenter.html")
         print(f"  마스터 키  →  {MASTER_KEY}")
     print(f"{'=' * 52}\n")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+
+    kwargs = {
+        "app": app,
+        "host": "0.0.0.0",
+        "port": port,
+    }
+    if use_ssl:
+        kwargs["ssl_certfile"] = ssl_cert
+        kwargs["ssl_keyfile"]  = ssl_key
+
+    uvicorn.run(**kwargs)
