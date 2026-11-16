@@ -137,12 +137,17 @@ class EmojiOverlay(QWidget):
         screen = QApplication.primaryScreen().geometry()
         self.setGeometry(screen)
 
-        self.setWindowFlags(
+        flags = (
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool
             | Qt.WindowType.WindowTransparentForInput
         )
+        if sys.platform.startswith("linux"):
+            # GNOME(mutter)은 새 창을 자기 판단대로 다른 모니터로 옮기고 이후 move도 무시함.
+            # override-redirect로 WM 배치를 우회해 주 디스플레이에 고정 (최상단 레이어에도 놓임).
+            flags |= Qt.WindowType.X11BypassWindowManagerHint
+        self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self._bubbles: dict[str, QLabel] = {}
